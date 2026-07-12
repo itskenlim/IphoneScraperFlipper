@@ -30,12 +30,17 @@ export function looksLikeSoldListing(bodyText, debug) {
     .toLowerCase()
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/\s+/g, " ");
-  const markers = ["this item is sold", "this listing is sold", "marked as sold", "sold Â·"];
+  const markers = ["this item is sold", "this listing is sold", "marked as sold"];
   for (const m of markers) {
     if (body.includes(m)) {
       if (debug) debug.match = m;
       return true;
     }
+  }
+  // Marketplace header badge, e.g. "Sold · iPhone 11".
+  if (/\bsold\s*(?:·|•|\||-)\s+/i.test(body) || /(?:^|\n)\s*sold\s*[·•]?\s+\S/i.test(body)) {
+    if (debug) debug.match = "sold_badge";
+    return true;
   }
   return false;
 }

@@ -110,11 +110,14 @@ async function recheckOne(page, candidate, opts, index, total) {
   const url = cleanText(candidate.url);
   const listingId = cleanText(candidate.listing_id);
   if (!url || !listingId) return null;
-  const graphqlOnly = envBool("PLAYWRIGHT_MONITOR_GRAPHQL_ONLY", false);
+  const monitorGraphqlOnly = envBool("PLAYWRIGHT_MONITOR_GRAPHQL_ONLY", false);
   const preferGraphqlPrice = envBool("PLAYWRIGHT_PREFER_GRAPHQL_PRICE_RAW", false);
   const label = cleanText(opts.label) || "monitor";
   const isMonitor = label === "monitor";
   const enrichOnly = label === "enrich";
+  // Discovery enrich should always be allowed to use DOM detail extraction
+  // even when monitor is configured as GraphQL-only.
+  const graphqlOnly = enrichOnly ? false : monitorGraphqlOnly;
   const embedFallbackEnabled = envBool("PLAYWRIGHT_MONITOR_EMBED_FALLBACK", true);
   const useDomStatus = !graphqlOnly && envBool("PLAYWRIGHT_MONITOR_STATUS_FALLBACK", true);
   let domMode = isMonitor

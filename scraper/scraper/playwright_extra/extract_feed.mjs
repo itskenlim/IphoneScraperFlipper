@@ -510,7 +510,7 @@ async function extractFromDom(page, { maxCards, scrollPages, scrollDelayMs, runI
           `location=${locationRaw || "n/a"}`
       );
     }
-    const sellerId = cleanText(row.listing_seller_id);
+    const sellerId = cleanText(raw?.listing_seller_id);
     if (sellerId && DISCOVERY_SELLER_BLOCKLIST.has(sellerId)) {
       continue;
     }

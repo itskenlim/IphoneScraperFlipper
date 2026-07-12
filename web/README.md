@@ -39,3 +39,4 @@ Open `http://localhost:3000`.
 
 - Never expose `SUPABASE_SERVICE_ROLE_KEY` in the browser (don’t use `NEXT_PUBLIC_*`).
 - The shared-password cookie is `httpOnly` and signed (HS256 via `jose`).
+# scripts
