@@ -120,6 +120,20 @@ node scraper/scripts/replay_pending.mjs scraper/logs/pending-monitor-<run_id>.js
 
 ## .env knobs (common)
 
+Templates (committed): `scraper/.env.example`, `web/.env.example`
+
+After tweaking live env files, refresh local backups (gitignored, includes secrets):
+
+```bash
+bash scripts/snapshot_env.sh
+```
+
+After wiping `.env` / `.env.local`:
+
+```bash
+bash scripts/restore_env.sh
+```
+
 ```env
 DB_RETRY_COUNT=5
 DB_RETRY_BASE_MS=2000

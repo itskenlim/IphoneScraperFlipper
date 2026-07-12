@@ -7,7 +7,7 @@ This repo includes ready-made `systemd --user` units for running discovery + mon
 Run once (headful) so the persistent profile in `PLAYWRIGHT_PROFILE_DIR` contains a valid Facebook session:
 
 ```bash
-cd ~/Desktop/Projects/IphoneflipperScrapper/scraper
+cd ~/dev/personal/IphoneScraperFlipper/scraper
 npm run sniffer:playwright-extra:discover -- --bootstrap-login --browser-channel chromium --no-headless
 ```
 
@@ -21,7 +21,7 @@ cp infra/systemd/iaase-*.service infra/systemd/iaase-*.timer ~/.config/systemd/u
 systemctl --user daemon-reload
 ```
 
-If your repo path is not `~/Desktop/Projects/IphoneflipperScrapper`, edit the `WorkingDirectory=` and `ExecStart=` lines in:
+If your repo path is not `~/dev/personal/IphoneScraperFlipper`, edit the `WorkingDirectory=` and `ExecStart=` lines in:
 
 - `~/.config/systemd/user/iaase-discover.service`
 - `~/.config/systemd/user/iaase-monitor.service`
@@ -54,7 +54,9 @@ The scraper also writes JSON artifacts under `logs/` (for example `logs/discover
   - Monitor: set `MONITOR_LIMIT` in `.env` (or edit `scripts/run_monitor.sh`)
 
 Notes:
-- Units assume the scraper working directory is `~/Desktop/Projects/IphoneflipperScrapper/scraper` (update if different).
+- Units assume the scraper working directory is `~/dev/personal/IphoneScraperFlipper/scraper` (update if different).
+- Monitor timer default: every 3 hours during 07:00–23:00 (`iaase-monitor.timer`).
+- Env backups: `bash scripts/snapshot_env.sh` after tweaks; `bash scripts/restore_env.sh` after a wipe. Templates: `scraper/.env.example`, `web/.env.example`.
 - Logs, profile, and other runtime folders live under `scraper/` when running via these units.
 
 ## Deal intelligence (optional)

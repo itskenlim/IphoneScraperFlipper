@@ -4,6 +4,11 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
 import { cleanText, envBool, envInt, isWeakDescription, normalizeLocationRaw, parsePhpPrice } from "./utils.mjs";
+import {
+  computeFailureLockout,
+  computeNextCheckAt,
+  readMonitorScheduleConfig
+} from "./monitor_schedule.mjs";
 
 function createSupabaseClient() {
   const url = cleanText(process.env.SUPABASE_URL);
@@ -144,7 +149,7 @@ export function savePendingRows({ runId, phase, rows, error, log }) {
   return target;
 }
 
-export async function persistToDatabase(rows, { log } = {}) {
+export async function persistToDatabase(rows, { log, phase } = {}) {
   if (!rows.length) {
     return { inserted: 0, updated: 0, unchanged: 0, existing: 0, versionsInserted: 0 };
   }
@@ -153,17 +158,34 @@ export async function persistToDatabase(rows, { log } = {}) {
   const baseDelayMs = envInt("DB_RETRY_BASE_MS", 1500);
   const captureChanges = envBool("DB_LOG_CHANGES", false);
   const changeLimit = Math.max(0, envInt("DB_LOG_CHANGE_LIMIT", 25));
+  const monitorPhase = cleanText(phase)?.toLowerCase() === "monitor";
+  const scheduleConfig = monitorPhase ? readMonitorScheduleConfig() : null;
 
   const supabase = createSupabaseClient();
   const listingIds = rows.map((r) => String(r.listing_id));
   const nowIso = new Date().toISOString();
+
+  let dealScoreByListingId = new Map();
+  if (monitorPhase && scheduleConfig?.scheduler === "tiered") {
+    const dealRes = await withRetry(
+      () => supabase.from("deal_metrics").select("listing_id,deal_score").in("listing_id", listingIds),
+      { retries, baseDelayMs, log, label: "db_deal_metrics_select" }
+    );
+    if (dealRes.error) {
+      log?.(`[WARN] deal_metrics_fetch_failed error=${dealRes.error.message}`);
+    } else {
+      dealScoreByListingId = new Map(
+        (dealRes.data || []).map((row) => [String(row.listing_id), row.deal_score ?? null])
+      );
+    }
+  }
 
   const existingRes = await withRetry(
     () =>
       supabase
         .from("listings")
         .select(
-          "id,listing_id,title,description,condition_raw,location_raw,price_raw,price_php,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,listing_price_amount,listing_price_formatted,listing_strikethrough_price,listing_is_live,listing_is_sold,listing_is_pending,listing_is_hidden,listing_seller_id,listing_location_city,listing_location_state"
+          "id,listing_id,title,description,condition_raw,location_raw,price_raw,price_php,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,monitor_last_checked_at,monitor_next_check_at,monitor_fail_count,monitor_lockout_until,listing_price_amount,listing_price_formatted,listing_strikethrough_price,listing_is_live,listing_is_sold,listing_is_pending,listing_is_hidden,listing_seller_id,listing_location_city,listing_location_state"
         )
         .in("listing_id", listingIds),
     { retries, baseDelayMs, log, label: "db_existing_select" }
@@ -314,6 +336,9 @@ export async function persistToDatabase(rows, { log } = {}) {
 
     if (!existing) {
       payload.first_seen_at = row.scraped_at || nowIso;
+      payload.monitor_next_check_at = nowIso;
+      payload.monitor_fail_count = 0;
+      payload.monitor_lockout_until = null;
       changedFields.push("new_listing");
       inserted += 1;
     } else {
@@ -388,6 +413,22 @@ export async function persistToDatabase(rows, { log } = {}) {
       }
     }
 
+    if (monitorPhase && scheduleConfig?.scheduler === "tiered") {
+      const dealScore = dealScoreByListingId.get(listingId) ?? null;
+      const scheduleInput = {
+        posted_at: payload.posted_at ?? existing?.posted_at ?? null,
+        first_seen_at: payload.first_seen_at ?? existing?.first_seen_at ?? null,
+        last_seen_at: payload.last_seen_at ?? existing?.last_seen_at ?? null,
+        last_price_change_at: payload.last_price_change_at ?? existing?.last_price_change_at ?? null
+      };
+      const { tier, nextCheckAt } = computeNextCheckAt(scheduleInput, dealScore, scheduleConfig, nowIso);
+      payload.monitor_last_checked_at = nowIso;
+      payload.monitor_next_check_at = nextCheckAt;
+      payload.monitor_fail_count = 0;
+      payload.monitor_lockout_until = null;
+      row._monitor_tier = tier;
+    }
+
     upserts.push(payload);
 
     if (changedFields.length) {
@@ -448,6 +489,61 @@ export async function persistToDatabase(rows, { log } = {}) {
 
   const existing = updated + unchanged;
   return { inserted, updated, unchanged, existing, versionsInserted, changedFieldCounts, changeSamples };
+}
+
+export async function recordMonitorFailures(failedListingIds, { log } = {}) {
+  const ids = [...new Set((failedListingIds || []).map((id) => cleanText(id)).filter(Boolean))];
+  if (!ids.length) return { updated: 0 };
+
+  const config = readMonitorScheduleConfig();
+  if (config.scheduler !== "tiered") return { updated: 0 };
+
+  const retries = envInt("DB_RETRY_COUNT", 3);
+  const baseDelayMs = envInt("DB_RETRY_BASE_MS", 1500);
+  const supabase = createSupabaseClient();
+  const nowMs = Date.now();
+
+  const existingRes = await withRetry(
+    () => supabase.from("listings").select("listing_id,monitor_fail_count").in("listing_id", ids),
+    { retries, baseDelayMs, log, label: "db_monitor_fail_select" }
+  );
+  if (existingRes.error) {
+    const msg = existingRes.error.message || String(existingRes.error);
+    log?.(`[WARN] monitor_failures_fetch_failed error=${msg}`);
+    return { updated: 0, error: msg };
+  }
+
+  const failCountById = new Map(
+    (existingRes.data || []).map((row) => [String(row.listing_id), Number(row.monitor_fail_count) || 0])
+  );
+
+  const updates = ids
+    .map((listingId) => {
+      const prev = failCountById.get(listingId) ?? 0;
+      const nextFailCount = prev + 1;
+      return {
+        listing_id: listingId,
+        monitor_fail_count: nextFailCount,
+        monitor_lockout_until: computeFailureLockout(nextFailCount, config, nowMs),
+        updated_at: new Date(nowMs).toISOString()
+      };
+    })
+    .filter(Boolean);
+
+  if (!updates.length) return { updated: 0 };
+
+  const upsertRes = await withRetry(
+    () => supabase.from("listings").upsert(updates, { onConflict: "listing_id" }),
+    { retries, baseDelayMs, log, label: "db_monitor_fail_upsert" }
+  );
+  if (upsertRes.error) {
+    const msg = upsertRes.error.message || String(upsertRes.error);
+    log?.(`[WARN] monitor_failures_upsert_failed error=${msg}`);
+    return { updated: 0, error: msg };
+  }
+
+  log?.(`[INFO] monitor_failures recorded=${updates.length}`);
+  return { updated: updates.length };
 }
 
 export async function persistScrapeRunMetrics({ runId, phase, status, startedAt, finishedAt, metrics, log }) {
@@ -679,7 +775,7 @@ export async function persistToDatabaseBatched(rows, { phase, runId, log } = {})
     const batch = rows.slice(i, i + batchSize);
     try {
       // eslint-disable-next-line no-await-in-loop
-      const res = await persistToDatabase(batch, { log });
+      const res = await persistToDatabase(batch, { log, phase });
       out.inserted += res.inserted;
       out.updated += res.updated;
       out.unchanged += res.unchanged;

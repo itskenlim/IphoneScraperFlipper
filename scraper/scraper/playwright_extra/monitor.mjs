@@ -4,6 +4,12 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
 import {
+  attachMonitorTier,
+  countMonitorTiers,
+  isListingDueForMonitor,
+  readMonitorScheduleConfig
+} from "./monitor_schedule.mjs";
+import {
   cleanOgTitle,
   deriveDescriptionFromDetail,
   deriveLocationFromDetail,
@@ -60,9 +66,90 @@ function hoursSince(value) {
 function shouldRefreshDescription(candidate, refreshHours) {
   if (!cleanText(candidate?.description)) return true;
   if (!Number.isFinite(refreshHours) || refreshHours <= 0) return true;
-  const hrs = hoursSince(candidate?.last_seen_at);
+  const anchor = candidate?.monitor_last_checked_at ?? candidate?.last_seen_at;
+  const hrs = hoursSince(anchor);
   if (!Number.isFinite(hrs)) return true;
   return hrs >= refreshHours;
+}
+
+function isMissingMonitorScheduleColumnError(error) {
+  const msg = String(error?.message || error || "");
+  return /column .*monitor_(next_check_at|last_checked_at|fail_count|lockout_until).* does not exist/i.test(msg);
+}
+
+async function fetchWatchlistCandidatesLegacy({ limit, supabase }) {
+  const query = supabase
+    .from("listings")
+    .select(
+      "listing_id,url,title,description,location_raw,price_raw,price_php,status,last_seen_at,posted_at,first_seen_at,last_price_change_at"
+    )
+    .eq("status", "active");
+
+  query.order("last_seen_at", { ascending: true, nullsFirst: true });
+
+  const res = await query.limit(Math.max(1, Math.min(limit, 5000)));
+  if (res.error) throw new Error(`DB watchlist fetch failed: ${res.error.message}`);
+  return dedupeCandidates(res.data || []);
+}
+
+async function fetchWatchlistCandidatesTiered({ limit, supabase, config, log }) {
+  const nowMs = Date.now();
+  const pool = Math.max(limit, Math.min(5000, limit * Math.max(1, config.fetchPoolMultiplier)));
+  const nowIso = new Date(nowMs).toISOString();
+
+  const res = await supabase
+    .from("listings")
+    .select(
+      "listing_id,url,title,description,location_raw,price_raw,price_php,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,monitor_next_check_at,monitor_last_checked_at,monitor_fail_count,monitor_lockout_until,deal:deal_metrics(deal_score)"
+    )
+    .eq("status", "active")
+    .or(`monitor_lockout_until.is.null,monitor_lockout_until.lte.${nowIso}`)
+    .or(`monitor_next_check_at.is.null,monitor_next_check_at.lte.${nowIso}`)
+    .order("monitor_next_check_at", { ascending: true, nullsFirst: true })
+    .limit(pool);
+
+  if (res.error) {
+    if (isMissingMonitorScheduleColumnError(res.error)) {
+      log?.(
+        "[WARN] monitor_schedule columns missing; falling back to legacy last_seen_at selection " +
+          "(hint: run scraper/sql/add_monitor_schedule_columns.sql)"
+      );
+      return fetchWatchlistCandidatesLegacy({ limit, supabase });
+    }
+    throw new Error(`DB watchlist fetch failed: ${res.error.message}`);
+  }
+
+  const due = dedupeCandidates(res.data || []).filter((row) => isListingDueForMonitor(row, nowMs));
+  return due.map((row) => attachMonitorTier(row, config, nowMs));
+}
+
+export async function fetchWatchlistCandidates({ limit, log } = {}) {
+  if (!limit || limit <= 0) return [];
+  const supabase = createSupabaseClient();
+  const config = readMonitorScheduleConfig();
+
+  let candidates =
+    config.scheduler === "legacy"
+      ? await fetchWatchlistCandidatesLegacy({ limit, supabase })
+      : await fetchWatchlistCandidatesTiered({ limit, supabase, config, log });
+
+  const skipBuyers = envBool("PLAYWRIGHT_WATCHLIST_SKIP_BUYERS", true);
+  if (skipBuyers) {
+    candidates = candidates.filter((c) => !looksLikeBuyerWantedPost(c?.title || ""));
+  }
+
+  const selected = candidates.slice(0, limit);
+  if (log && config.scheduler === "tiered") {
+    const tiers = countMonitorTiers(selected);
+    log(
+      `[INFO] monitor_schedule mode=tiered due_pool=${candidates.length} selected=${selected.length} ` +
+        `tiers hot=${tiers.hot} warm=${tiers.warm} cold=${tiers.cold}`
+    );
+  } else if (log) {
+    log(`[INFO] monitor_schedule mode=legacy selected=${selected.length}`);
+  }
+
+  return selected;
 }
 
 function createSupabaseClient() {
@@ -81,28 +168,6 @@ function dedupeCandidates(candidates) {
     byListingId.set(key, row);
   }
   return Array.from(byListingId.values());
-}
-
-export async function fetchWatchlistCandidates({ limit }) {
-  if (!limit || limit <= 0) return [];
-  const supabase = createSupabaseClient();
-
-  const query = supabase
-    .from("listings")
-    .select("listing_id,url,title,description,location_raw,price_raw,price_php,status,last_seen_at")
-    .eq("status", "active");
-
-  query.order("last_seen_at", { ascending: true, nullsFirst: true });
-
-  const res = await query.limit(Math.max(1, Math.min(limit, 5000)));
-  if (res.error) throw new Error(`DB watchlist fetch failed: ${res.error.message}`);
-  let candidates = dedupeCandidates(res.data || []);
-
-  const skipBuyers = envBool("PLAYWRIGHT_WATCHLIST_SKIP_BUYERS", true);
-  if (skipBuyers) {
-    candidates = candidates.filter((c) => !looksLikeBuyerWantedPost(c?.title || ""));
-  }
-  return candidates.slice(0, limit);
 }
 
 async function recheckOne(page, candidate, opts, index, total) {
@@ -822,6 +887,7 @@ async function recheckParallel(context, candidates, opts) {
   }
 
   const out = [];
+  const failedListingIds = [];
   const total = candidates.length;
   let cursor = 0;
 
@@ -834,6 +900,10 @@ async function recheckParallel(context, candidates, opts) {
       const candidate = candidates[myIndex];
       const row = await recheckOne(page, candidate, opts, myIndex + 1, total);
       if (row) out.push(row);
+      else {
+        const id = cleanText(candidate?.listing_id);
+        if (id) failedListingIds.push(id);
+      }
       if (abortRef.blocked) return;
     }
   }
@@ -845,7 +915,7 @@ async function recheckParallel(context, candidates, opts) {
   }
 
   if (abortRef.blocked) throw new Error("SESSION_BLOCKED");
-  return out;
+  return { rows: out, failedListingIds };
 }
 
 export async function recheckCandidatesChunk({
@@ -902,15 +972,15 @@ export async function runMonitor({
   logEnabled,
   log
 }) {
-  const candidates = await fetchWatchlistCandidates({ limit });
-  log?.(`[INFO] monitor_start limit=${limit} mode=oldest concurrency=${concurrency} candidates=${candidates.length}`);
+  const candidates = await fetchWatchlistCandidates({ limit, log });
+  log?.(`[INFO] monitor_start limit=${limit} concurrency=${concurrency} candidates=${candidates.length}`);
 
   const size = Math.max(1, chunkSize || 20);
   const rows = [];
   for (let i = 0; i < candidates.length; i += size) {
     const chunk = candidates.slice(i, i + size);
     // eslint-disable-next-line no-await-in-loop
-    const out = await recheckCandidatesChunk({
+    const { rows: chunkRows } = await recheckCandidatesChunk({
       context,
       runId,
       queryUrl,
@@ -922,7 +992,7 @@ export async function runMonitor({
       logEnabled,
       log
     });
-    rows.push(...out);
+    rows.push(...chunkRows);
   }
   return { candidatesCount: candidates.length, rows };
 }

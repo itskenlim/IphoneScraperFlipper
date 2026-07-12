@@ -7,11 +7,13 @@ import {
   persistDiscoveryInsertOnlyBatched,
   persistDiscoveryNetworkUpdateBatched,
   persistScrapeRunMetrics,
-  persistToDatabaseBatched
+  persistToDatabaseBatched,
+  recordMonitorFailures
 } from "./db.mjs";
 import { extractDiscoveryRows, installNetworkListingCollector } from "./extract_feed.mjs";
 import { looksLikeLoginOrBlock } from "./fb_checks.mjs";
 import { fetchWatchlistCandidates, recheckCandidatesChunk } from "./monitor.mjs";
+import { countMonitorTiers, readMonitorScheduleConfig } from "./monitor_schedule.mjs";
 import { cleanText, envBool, gotoWithRetry, looksLikeBuyerWantedPost, randomBetween, sleep } from "./utils.mjs";
 
 function parseKeywordList(value) {
@@ -295,7 +297,7 @@ export async function runDiscoveryJob({
       let enriched = [];
       if (doEnrich) {
         // eslint-disable-next-line no-await-in-loop
-        enriched = await recheckCandidatesChunk({
+        enriched = (await recheckCandidatesChunk({
           context,
           runId,
           queryUrl: cfg.queryUrl,
@@ -311,7 +313,7 @@ export async function runDiscoveryJob({
           waitForNetworkIdle: false,
           progressBase: i,
           progressTotal: newRows.length
-        });
+        })).rows;
       }
 
       const byId = new Map(enriched.map((r) => [String(r.listing_id), r]));
@@ -468,14 +470,16 @@ export async function runMonitorJob({
 }) {
   const startedAt = new Date().toISOString();
   const finalLimit = limit ?? cfg.watchlistRecheckLimit;
+  const scheduleConfig = readMonitorScheduleConfig();
   const candidates = await fetchWatchlistCandidates({
-    limit: finalLimit
+    limit: finalLimit,
+    log
   });
   const candidatesCount = candidates.length;
 
   log(
-    `[INFO] monitor_start limit=${finalLimit} mode=oldest concurrency=${cfg.watchlistConcurrency} ` +
-      `chunk_size=${cfg.watchlistChunkSize} candidates=${candidatesCount}`
+    `[INFO] monitor_start limit=${finalLimit} scheduler=${scheduleConfig.scheduler} ` +
+      `concurrency=${cfg.watchlistConcurrency} chunk_size=${cfg.watchlistChunkSize} candidates=${candidatesCount}`
   );
   log?.(`[INFO] monitor_network enabled=${cfg.monitorUseNetwork ? "true" : "false"}`);
 
@@ -494,14 +498,16 @@ export async function runMonitorJob({
   const changeSamples = [];
   const changeLimit = Math.max(0, Number.parseInt(process.env.DB_LOG_CHANGE_LIMIT || "25", 10) || 25);
 
+  let totalFailed = 0;
   let wroteMonitorJson = false;
   try {
     for (let i = 0; i < candidates.length; i += size) {
       const chunk = candidates.slice(i, i + size);
       let out = [];
+      let failedListingIds = [];
       try {
         // eslint-disable-next-line no-await-in-loop
-        out = await recheckCandidatesChunk({
+        const chunkResult = await recheckCandidatesChunk({
           context,
           runId,
           queryUrl: cfg.queryUrl,
@@ -520,6 +526,8 @@ export async function runMonitorJob({
           progressBase: i,
           progressTotal: candidates.length
         });
+        out = chunkResult.rows || [];
+        failedListingIds = chunkResult.failedListingIds || [];
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (msg.includes("SESSION_BLOCKED")) {
@@ -542,6 +550,11 @@ export async function runMonitorJob({
       }
 
       if (cfg.dryRun) continue;
+      if (failedListingIds.length) {
+        // eslint-disable-next-line no-await-in-loop
+        const failRes = await recordMonitorFailures(failedListingIds, { log });
+        totalFailed += failRes.updated || 0;
+      }
       if (!out.length) continue;
 
       // eslint-disable-next-line no-await-in-loop
@@ -586,7 +599,7 @@ export async function runMonitorJob({
   }
 
   log(
-    `[INFO] results phase=monitor rechecked=${candidatesCount} listings_updated=${totalUpdated} versions_inserted=${totalVersions}`
+    `[INFO] results phase=monitor rechecked=${candidatesCount} listings_updated=${totalUpdated} versions_inserted=${totalVersions} monitor_failures=${totalFailed}`
   );
   log(
     `[INFO] monitor_sources network=${networkHitCount} embed=${embedHitCount} none=${noneHitCount} ` +
@@ -606,6 +619,7 @@ export async function runMonitorJob({
       rows_checked: rows.length,
       listings_updated: totalUpdated,
       versions_inserted: totalVersions,
+      monitor_failures: totalFailed,
       network_hits: networkHitCount,
       embed_hits: embedHitCount,
       none_hits: noneHitCount,
