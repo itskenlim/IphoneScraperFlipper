@@ -4,7 +4,7 @@
 
 ### 1) Bootstrap login (Playwright session)
 ```bash
-cd ~/Desktop/Projects/IphoneflipperScrapper/scraper
+cd ~/dev/personal/IphoneScraperFlipper/scraper
 bash scripts/run_discover.sh -- --bootstrap-login --browser-channel chromium --no-headless
 ```
 
@@ -12,7 +12,7 @@ bash scripts/run_discover.sh -- --bootstrap-login --browser-channel chromium --n
 Set two different persistent profile dirs (each dir = one Facebook login session), then bootstrap each once:
 
 ```bash
-cd ~/Desktop/Projects/IphoneflipperScrapper/scraper
+cd ~/dev/personal/IphoneScraperFlipper/scraper
 
 # Account A (used by discovery)
 export PLAYWRIGHT_PROFILE_DIR_DISCOVER=".playwright_profile/fb_account_a"
@@ -45,7 +45,7 @@ When the scraper detects a logged-out/blocked session, it writes a marker file:
 
 Refresh the session for the right job/profile:
 ```bash
-cd ~/Desktop/Projects/IphoneflipperScrapper/scraper
+cd ~/dev/personal/IphoneScraperFlipper/scraper
 bash scripts/bootstrap_login.sh discover
 bash scripts/bootstrap_login.sh monitor
 ```
@@ -104,7 +104,7 @@ Example values:
 ## Manual runs (no systemd)
 
 ```bash
-cd ~/Desktop/Projects/IphoneflipperScrapper/scraper
+cd ~/dev/personal/IphoneScraperFlipper/scraper
 bash scripts/run_discover.sh
 bash scripts/run_monitor.sh
 bash scripts/run_compute_deals.sh
