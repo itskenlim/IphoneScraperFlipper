@@ -15,10 +15,9 @@ const previewRiskFlags = {
 };
 
 const stats = [
-  { label: "Updated every few minutes", value: "Fresh data", helper: "so you see the latest deals" },
-  { label: "Highlights underpriced listings", value: "Value first", helper: "so you can act fast" },
-  { label: "Flags risky devices", value: "Red flags", helper: "so you avoid bad units" },
-  { label: "Shows what’s worth messaging", value: "Faster decisions", helper: "no guesswork" }
+  { label: "Deal scoring", value: "Find good deals", helper: "Spot underpriced listings fast" },
+  { label: "Risk checks", value: "Avoid risky phones", helper: "Face ID, screen, locks, and more" },
+  { label: "Fresh watchlist", value: "Stay ahead", helper: "Listings checked on a schedule" }
 ];
 
 const steps = [
@@ -140,7 +139,7 @@ export default function Home() {
         </Card>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-3">
         {stats.map((stat) => (
           <Card key={stat.label} className="border-border/70 bg-card/70">
             <CardContent className="flex min-h-[120px] flex-col justify-center gap-2 p-4">
