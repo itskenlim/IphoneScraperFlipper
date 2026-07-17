@@ -1,231 +1,107 @@
-# Design System — Bantay Pilipinas
+# Design System — IAASE
 
-> Semantic design system extracted from the codebase. Reference this file for all visual decisions.
+> Compact “Ops Center Noir” aesthetic adapted for the IAASE iPhone Marketplace deal finder.
+> Borrowed from a denser ops dashboard for density and calm night viewing — **brand and content are IAASE**, not the source project.
 
 ## Aesthetic Direction
 
-**"Ops Center Noir"** — A dark-themed, data-dense monitoring dashboard inspired by military operations centers and air traffic control interfaces. The design prioritizes information density, real-time data legibility, and sustained viewing comfort. Philippine flag colors (blue, red, yellow) serve as intentional accents encoding data semantics: blue for information, red for alerts, yellow for live/active states.
+**Ops Center Noir (adapted)** — Dark, data-dense UI for sustained watching of listings. High information per pixel, low chrome. Philippine accents encode meaning: blue = info, red = alerts/red flags, yellow/green = live/deal-positive.
+
+Keep compactness: tight padding, mono for numbers, short labels, avoid marketing fluff on the board.
+
+---
+
+## Brand
+
+| Element | Value |
+|---------|--------|
+| Product | **IAASE** |
+| Tagline (nav, sm+) | iPhone deals |
+| Primary job | Spot underpriced / risky Marketplace iPhones fast |
+| Primary CTA | View listings |
 
 ---
 
 ## Color System
 
-All colors use the **oklch** color space for perceptual uniformity. Defined in `client/src/index.css`.
+Colors live in `web/app/globals.css` (Tailwind CSS variables as RGB channels). Prefer tokens over raw hex in components.
 
-### Dark Theme (Default)
+### Dark (default for ops feel)
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--background` | `oklch(0.10 0.015 260)` | Page background — deep navy |
-| `--foreground` | `oklch(0.92 0.005 260)` | Primary text |
-| `--card` | `oklch(0.14 0.02 260)` | Panel backgrounds |
-| `--card-foreground` | `oklch(0.92 0.005 260)` | Panel text |
-| `--primary` | `oklch(0.55 0.18 260)` | Primary actions, links |
-| `--secondary` | `oklch(0.18 0.02 260)` | Secondary surfaces |
-| `--muted` | `oklch(0.20 0.015 260)` | Disabled/subdued surfaces |
-| `--muted-foreground` | `oklch(0.60 0.01 260)` | Secondary text, timestamps |
-| `--border` | `oklch(0.25 0.02 260)` | Panel borders, dividers |
-| `--destructive` | `oklch(0.55 0.22 25)` | Error states, critical alerts |
+| Token | Role |
+|-------|------|
+| `--background` | Deep navy / near-black page |
+| `--foreground` | Primary text |
+| `--card` | Panels / preview cards |
+| `--primary` | Actions, links, live dot |
+| `--muted-foreground` | Secondary text, timestamps |
+| `--destructive` / rose accents | Red flags, critical |
 
-### Light Theme
+### Semantic accents (use sparingly)
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--background` | `oklch(0.975 0.003 80)` | Page background — warm paper-white |
-| `--foreground` | `oklch(0.15 0.02 260)` | Primary text |
-| `--card` | `oklch(0.995 0.002 80)` | Panel backgrounds |
-| `--primary` | `oklch(0.42 0.18 260)` | Primary actions (darker for contrast) |
-| `--border` | `oklch(0.90 0.008 80)` | Subtle borders |
-
-### Philippine Flag Accents
-
-| Token | Value | Semantic Meaning |
-|-------|-------|-----------------|
-| `--color-ph-blue` | `oklch(0.40 0.15 260)` | Information, data layers |
-| `--color-ph-red` | `oklch(0.55 0.22 25)` | Alerts, critical events, active tab |
-| `--color-ph-yellow` | `oklch(0.85 0.17 85)` | Live indicators, active states |
-| `--color-ph-navy` | `oklch(0.12 0.02 260)` | Deep background accents |
-
-### Chart Colors
-
-| Token | Hue | Purpose |
-|-------|-----|---------|
-| `--chart-1` | 260 (blue) | Primary data series |
-| `--chart-2` | 25 (red) | Alert/critical series |
-| `--chart-3` | 85 (yellow) | Highlight/active series |
-| `--chart-4` | 160 (teal) | Secondary data series |
-| `--chart-5` | 300 (purple) | Tertiary data series |
-
-### Data Freshness Colors (Hardcoded in FreshnessContext)
-
-| State | Color | Threshold |
-|-------|-------|-----------|
-| Fresh | Green `#22c55e` | < 5 minutes |
-| Aging | Yellow `#eab308` | 5-15 minutes |
-| Stale | Orange `#f97316` | 15-30 minutes |
-| Very Stale | Red `#ef4444` | > 30 minutes |
+| Meaning | Usage |
+|---------|--------|
+| Deal positive | Emerald badges (A/B scores) |
+| Alert | Rose / destructive borders on risk blocks |
+| Live | Primary blue glow on brand dot |
 
 ---
 
 ## Typography
 
-Defined in `client/src/index.css` `@theme inline` block and `@layer base`.
+| Role | Font | Notes |
+|------|------|--------|
+| UI / body | Fira Sans (`--font-sans`) | Layout, copy |
+| Data | Fira Code (`--font-mono`) | Prices, %, scores |
 
-| Role | Font Family | Weight | Size | Usage |
-|------|------------|--------|------|-------|
-| **Display** | Space Grotesk | 600-700 | 18-24px | Panel titles, headings, header |
-| **Body** | IBM Plex Sans | 400-500 | 13-16px | Body text, descriptions, labels |
-| **Data** | JetBrains Mono | 400 | 12-14px | Timestamps, coordinates, magnitudes |
-
-### Hierarchy Rules
-
-- `h1-h6` elements automatically use Space Grotesk via `@layer base`.
-- `body` uses IBM Plex Sans as the default.
-- Monospace data uses `font-mono` Tailwind class.
-- Font loading via Google Fonts CDN in `client/index.html`.
+Headlines: semibold, tight tracking. Body: short sentences. Prefer one support line under a hero headline.
 
 ---
 
-## Spacing and Layout
+## Layout density
 
-### Desktop Grid
-
-| Property | Value | Notes |
-|----------|-------|-------|
-| Grid system | react-grid-layout | 12 columns |
-| Row height | Dynamic (calculated from viewport) | `(viewportHeight - headerHeight) / maxRows` |
-| Margin | `[6, 6]` | 6px gap between panels |
-| Bounded | `true` | Panels cannot overflow viewport |
-| Compaction | Vertical | Panels compact upward |
-
-### Default Panel Layout
-
-| Panel | Position (x,y) | Size (w,h) | Min Size |
-|-------|----------------|-----------|----------|
-| Map | 0,0 | 7x13 | 4x6 |
-| PhiVolcs | 7,0 | 2x13 | 2x4 |
-| Volcano Cams | 9,0 | 3x13 | 2x3 |
-| PH News | 0,13 | 3x12 | 2x3 |
-| Water Levels | 3,13 | 3x12 | 2x3 |
-| Weather & AQ | 6,13 | 3x12 | 2x3 |
-| Livestream | 9,13 | 3x12 | 2x3 |
-
-### Mobile Layout
-
-| Property | Value |
-|----------|-------|
-| Bottom nav height | 64px (`MOBILE_NAV_HEIGHT`) |
-| Tab count | 5 (Home, Map, News, Video, Alerts) |
-| Tab switching | CSS `display: none` (no remounting) |
-| Safe area | `env(safe-area-inset-bottom)` |
-| Breakpoint | `< 768px` |
-
-### Border Radius
-
-| Token | Value |
-|-------|-------|
-| `--radius` | `0.5rem` (8px) |
-| `--radius-sm` | `0.25rem` (4px) |
-| `--radius-md` | `0.375rem` (6px) |
-| `--radius-lg` | `0.5rem` (8px) |
-| `--radius-xl` | `0.625rem` (10px) |
+- Max content width: `max-w-6xl`
+- Mobile padding: `px-3`; `sm:px-4`; `lg:px-6`
+- Section gaps: ~`space-y-10` on landing (not huge marketing whitespace)
+- Cards: thin borders `border-border/70`, muted fills `bg-card/60–80`
+- **No emoji icons** — Lucide / Heroicons only
+- Clickable: `cursor-pointer` + 150–200ms color transitions
 
 ---
 
-## Component Patterns
+## Navigation (mobile-first)
 
-### Panel Wrapper
+| Breakpoint | Behavior |
+|------------|----------|
+| `< sm` | Brand + theme + hamburger; links in expand panel |
+| `sm+` | Brand + subtitle · Listings · Login · Theme |
 
-Every dashboard panel follows this structure:
-
-```
-PanelWrapper (border, rounded, overflow-hidden, flex-col)
-├── Header (flex, items-center, justify-between, px-3, py-2)
-│   ├── Icon + Title (Space Grotesk, font-semibold)
-│   └── Controls (freshness indicator, action buttons)
-├── Content (flex-1, overflow-y-auto, custom-scrollbar)
-│   └── Panel-specific content
-└── Footer (optional, source attribution)
-```
-
-### Scrollbar Style
-
-Custom scrollbar mimicking a "crypto watchlist" aesthetic:
-
-- Width: 6px
-- Track: transparent
-- Thumb: `var(--border)` with hover brightening
-- Border-radius: 3px
-
-### Mobile Bottom Nav Bar
-
-```
-Nav (fixed, bottom-0, left-0, right-0, z-[9999])
-├── Frosted glass background (backdrop-blur-xl)
-├── 5 tab buttons (flex, justify-around)
-│   ├── Icon (SVG, filled when active, outlined when inactive)
-│   └── Label (text-[10px], font-medium)
-└── Safe area padding (env(safe-area-inset-bottom))
-```
-
-Active tab: Red color (`--ph-red`), filled icon.
-Inactive tab: Muted foreground, outlined icon.
+Do not put full “View listings” + Login + theme + long subtitle on one mobile row.
 
 ---
 
-## Motion
+## Landing structure
 
-| Interaction | Duration | Easing | Property |
-|-------------|----------|--------|----------|
-| Theme transition | 300ms | ease | background-color, color |
-| Panel drag | Instant | N/A | transform (via react-grid-layout) |
-| Tab switch | 0ms | N/A | display toggle (no animation) |
-| Hover states | 150ms | ease | color, background-color, opacity |
-| Toast appear | 200ms | ease-out | transform, opacity |
+1. Hero: brand, one headline, one support line, one primary CTA (+ quiet Login)
+2. Live preview card (product truth)
+3. How it works — 3 compact steps
+4. Why — short bullet list (not a card grid)
+5. Final CTA strip
 
-### Motion Philosophy
-
-- Motion is **functional, not decorative**.
-- Tab switching is instant (CSS display toggle) to prioritize data access speed.
-- `prefers-reduced-motion` must be respected for all animations.
-- No parallax, no scroll-triggered animations, no decorative micro-motion.
+Hero must still read as IAASE if nav is removed.
 
 ---
 
-## Z-Index Scale
+## Dashboard / listings
 
-| Layer | Z-Index | Element |
-|-------|---------|---------|
-| Base content | 0 | Dashboard panels |
-| Panel drag overlay | 10 | react-grid-layout drag handle |
-| Header | 50 | Dashboard header bar |
-| Tooltips/Popovers | 100 | Radix UI popovers |
-| Mobile nav | 9999 | Bottom tab navigation |
-| Toasts | 10000 | Sonner toast notifications |
+Keep ops density: tables/cards with mono prices, deal badges, signal pills. Prefer horizontal density on desktop; stack on mobile. Respect `prefers-reduced-motion`.
 
 ---
 
-## Icons
+## Anti-patterns
 
-- **Library:** Lucide React (`lucide-react` v0.453)
-- **Custom SVGs:** Mobile tab icons (inline SVG for filled/outlined variants)
-- **Panel icons:** Text abbreviations in header (MAP, PV, VCAM, RSS, WL, WX, LIVE)
-- **No emojis** as UI icons — SVG only.
-
----
-
-## Accessibility
-
-| Requirement | Implementation |
-|-------------|---------------|
-| Color contrast | 4.5:1 minimum (oklch values chosen for this) |
-| Focus rings | Default Tailwind `outline-ring/50` on all interactive elements |
-| ARIA labels | Icon-only buttons have `aria-label` |
-| Keyboard nav | Tab order matches visual order |
-| Reduced motion | Respect `prefers-reduced-motion` media query |
-| Touch targets | 44x44px minimum on mobile |
-
----
-
-*Generated from codebase analysis on March 6, 2026*
-*Source files: `client/src/index.css`, `client/src/pages/Dashboard.tsx`, `client/src/contexts/ThemeContext.tsx`*
+- Generic purple SaaS gradients / glow stacks
+- Cramped mobile nav with multiple labeled buttons
+- Long hero copy walls
+- Emoji as UI icons
+- Treating source-project names (e.g. Bantay) as this product’s brand

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BadgePercent, CheckCircle2, Clock, Flag, Radar, ShieldCheck } from "lucide-react";
+import { BadgePercent, Clock, Flag, Radar, ShieldCheck } from "lucide-react";
 
 import { ListingSignalPills } from "@/components/listing-signal-pills";
 import { Badge } from "@/components/ui/badge";
@@ -63,46 +63,20 @@ export default function Home() {
     <div className="space-y-12 sm:space-y-16">
       <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
         <div className="space-y-5">
-          <Badge variant="outline" className="w-fit border-border/70 bg-card/60 text-xs">
-            Ops Center Noir · Deal Intelligence
-          </Badge>
-              <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
-  Spot underpriced iPhones before others do.
-</h1>
-
-<p className="mt-2 text-lg font-semibold text-foreground sm:text-xl">
-  Stop overpaying or buying bad units.
-</p>
-
-<p className="mt-4 text-base text-muted-foreground sm:text-lg">
-  We compare prices and flag hidden issues so you don’t overpay or buy a bad unit.
-</p>
-
-<p className="mt-2 text-sm text-foreground/70">
-  Skip the noise — find listings that are actually worth your time.
-</p>
-
-<p className="mt-1 text-sm text-foreground/60">
-  Good deals don’t stay long.
-</p>
-
-<div className="mt-4 flex flex-wrap gap-2">
-            <Button asChild className="min-w-[160px]">
-              <Link href="/listings">View listings</Link>
+          <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
+            Spot underpriced iPhones before others do.
+          </h1>
+          <p className="max-w-xl text-base text-muted-foreground sm:text-lg">
+            Real-time marketplace intelligence that scores listings, estimates market value, and flags
+            hidden issues.
+          </p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button asChild className="min-w-[160px] cursor-pointer">
+              <Link href="/listings">View Listings</Link>
             </Button>
-            <Button asChild variant="secondary" className="min-w-[120px]">
+            <Button asChild variant="secondary" className="min-w-[120px] cursor-pointer">
               <Link href="/login">Login</Link>
             </Button>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              We compare similar listings to estimate real value
-            </span>
-            <span className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              We highlight issues like Face ID, screen, and locks
-            </span>
           </div>
         </div>
 
