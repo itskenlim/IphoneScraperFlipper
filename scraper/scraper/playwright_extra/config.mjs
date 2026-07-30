@@ -67,7 +67,9 @@ export function readRuntimeConfig(args) {
     discoveryMinPricePhp: envInt("PLAYWRIGHT_DISCOVERY_MIN_PRICE_PHP", 5000),
     discoveryFilterBuyers: envBool("PLAYWRIGHT_DISCOVERY_FILTER_BUYERS", true),
     discoveryExcludeKeywords: cleanText(process.env.PLAYWRIGHT_DISCOVERY_EXCLUDE_KEYWORDS) || "",
-    discoveryRequireIphoneModel: envBool("PLAYWRIGHT_DISCOVERY_REQUIRE_IPHONE_MODEL", false),
+    // Default on: Marketplace "iphone" search still returns laptops/swap junk.
+    discoveryRequireIphoneModel: envBool("PLAYWRIGHT_DISCOVERY_REQUIRE_IPHONE_MODEL", true),
+    discoveryRejectNonIphoneProduct: envBool("PLAYWRIGHT_DISCOVERY_REJECT_NON_IPHONE_PRODUCT", true),
     discoveryUpdateExistingGraphql: envBool("PLAYWRIGHT_DISCOVERY_UPDATE_EXISTING_GRAPHQL", false),
     discoveryGraphqlOnly: envBool("PLAYWRIGHT_DISCOVERY_GRAPHQL_ONLY", false),
     watchlistRecheckLimit: envInt("PLAYWRIGHT_WATCHLIST_RECHECK_LIMIT", 8),

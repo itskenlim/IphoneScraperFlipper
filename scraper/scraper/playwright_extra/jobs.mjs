@@ -14,68 +14,8 @@ import { extractDiscoveryRows, installNetworkListingCollector } from "./extract_
 import { looksLikeLoginOrBlock } from "./fb_checks.mjs";
 import { fetchWatchlistCandidates, recheckCandidatesChunk } from "./monitor.mjs";
 import { countMonitorTiers, readMonitorScheduleConfig } from "./monitor_schedule.mjs";
-import { cleanText, envBool, gotoWithRetry, looksLikeBuyerWantedPost, randomBetween, sleep } from "./utils.mjs";
-
-function parseKeywordList(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return [];
-  return raw
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-const IPHONE_MODEL_RE =
-  /\biphone\s*(se|x|xs|max|xr|7|8|11|12|13|14|15|16|17)\b/i;
-
-function hasIphoneModel(title, description) {
-  const text = `${title || ""} ${description || ""}`.trim();
-  if (!text) return false;
-  return IPHONE_MODEL_RE.test(text);
-}
-
-function shouldSkipAsNoise(row, cfg) {
-  const title = String(row?.title || "").toLowerCase();
-  const description = String(row?.description || "");
-  const price = row?.price_php;
-
-  if (cfg.discoveryFilterBuyers) {
-    if (looksLikeBuyerWantedPost(row?.title || "")) return { skip: true, reason: "buyer_post" };
-  }
-
-  const keywords = parseKeywordList(cfg.discoveryExcludeKeywords);
-  for (const k of keywords) {
-    if (k && title.includes(k)) return { skip: true, reason: "exclude_keyword" };
-  }
-
-  const swapLike = /\bswap\b/i.test(title) || /\bswap\b/i.test(description);
-  if (swapLike) {
-    if (!(typeof price === "number" && Number.isFinite(price) && price >= (cfg.discoveryMinPricePhp || 0))) {
-      return { skip: true, reason: "swap_no_price" };
-    }
-  }
-
-  const hasModel = hasIphoneModel(title, description);
-  if (cfg.discoveryRequireIphoneModel) {
-    if (!hasModel) return { skip: true, reason: "no_iphone_model" };
-  }
-
-  if (Number.isFinite(cfg.discoveryMinPricePhp) && cfg.discoveryMinPricePhp > 0) {
-    if (typeof price === "number" && Number.isFinite(price) && price < cfg.discoveryMinPricePhp) {
-      return { skip: true, reason: "min_price" };
-    }
-    if (price == null) {
-      // If we can't parse a price at all, it's often a swap/ad/accessory. Let monitor pick up real phones later.
-      if (cfg.discoveryRequireIphoneModel && hasModel) {
-        // Keep model-matching listings for enrichment to fetch the real price.
-        return { skip: false, reason: null };
-      }
-      return { skip: true, reason: "no_price" };
-    }
-  }
-
-  return { skip: false, reason: null };
-}
+import { shouldSkipAsNoise } from "./discovery_filter.mjs";
+import { cleanText, envBool, gotoWithRetry, randomBetween, sleep } from "./utils.mjs";
 
 function hasGraphqlStatus(row) {
   return ["listing_is_live", "listing_is_sold", "listing_is_pending", "listing_is_hidden"].some(
@@ -231,6 +171,7 @@ export async function runDiscoveryJob({
     let droppedBuyer = 0;
     let droppedSwap = 0;
     let droppedNoModel = 0;
+    let droppedNonIphone = 0;
 
     for (const row of extracted.rows) {
       const decision = shouldSkipAsNoise(row, cfg);
@@ -242,6 +183,7 @@ export async function runDiscoveryJob({
         else if (decision.reason === "buyer_post") droppedBuyer += 1;
         else if (decision.reason === "swap_no_price") droppedSwap += 1;
         else if (decision.reason === "no_iphone_model") droppedNoModel += 1;
+        else if (decision.reason === "non_iphone_product") droppedNonIphone += 1;
         continue;
       }
       filtered.push(row);
@@ -251,7 +193,7 @@ export async function runDiscoveryJob({
       log(
         `[INFO] discovery_filter dropped=${dropped} dropped_min_price=${droppedMinPrice} dropped_no_price=${droppedNoPrice} ` +
           `dropped_keyword=${droppedKeyword} dropped_buyer=${droppedBuyer} dropped_swap=${droppedSwap} ` +
-          `dropped_no_model=${droppedNoModel} kept=${filtered.length}`
+          `dropped_no_model=${droppedNoModel} dropped_non_iphone=${droppedNonIphone} kept=${filtered.length}`
       );
     }
 
