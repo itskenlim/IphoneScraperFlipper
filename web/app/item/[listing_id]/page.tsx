@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, CheckCircle2, ExternalLink, XCircle } from "lucide-react";
 
@@ -41,6 +40,9 @@ function buildWarnings(listing: any): string[] {
 
   if (flags.icloud_lock) warnings.push("iCloud / reset risk");
   if (flags.wanted_post) warnings.push("Wanted / buying post");
+  if (flags.for_parts) warnings.push("For parts / repair / AS-IS");
+  if (flags.dead_unit) warnings.push("Doesn't turn on / dead unit");
+  if (flags.water_damage) warnings.push("Water damage");
   if (flags.price_too_low) warnings.push("Tikalon price check");
   if (flags.audio_issue) warnings.push("Mic / speaker issue");
   if (flags.face_id_not_working) warnings.push("Face ID not working");
@@ -72,11 +74,17 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
   const profit = typeof listing.est_profit_php === "number" ? listing.est_profit_php : null;
 
   const flags = parseRiskFlags(listing.risk_flags);
-  const hardBlocked = flags.icloud_lock || flags.wanted_post || score === "NA";
+  const hardBlocked =
+    flags.icloud_lock ||
+    flags.wanted_post ||
+    flags.for_parts ||
+    flags.dead_unit ||
+    flags.water_damage ||
+    score === "NA";
   const faceIdTri = triStateFromFlags(flags, "face_id_working", "face_id_not_working");
   const trutoneTri = triStateFromFlags(flags, "trutone_working", "trutone_missing");
 
-  const goodForFlipping =
+  const goodDeal =
     !hardBlocked &&
     (score === "A" || score === "B" || score === "C") &&
     profit != null &&
@@ -84,20 +92,24 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
     profit > 0 &&
     confidence !== "low";
 
-  const verdictTitle = goodForFlipping
+  const verdictTitle = goodDeal
     ? "Good deal"
     : hardBlocked
-      ? "High risk — not recommended"
+      ? flags.for_parts || flags.dead_unit || flags.water_damage
+        ? "For parts / not usable as-is"
+        : "High risk — not recommended"
       : profit != null && profit <= 0
-        ? "Not profitable based on comps"
+        ? "Priced at or above typical"
         : confidence === "low"
           ? "Low confidence — needs a quick check"
           : "Needs a quick manual check";
 
   const verdictReason = hardBlocked
-    ? "Major risk flags were detected."
+    ? flags.for_parts || flags.dead_unit || flags.water_damage
+      ? "Listed as dead, water-damaged, or for repair/parts — savings do not apply."
+      : "Major risk flags were detected."
     : profit != null && profit <= 0
-      ? "Estimated profit is not positive."
+      ? "Similar phones usually sell around this price or lower."
       : confidence === "low"
         ? "Not enough similar listings for strong confidence."
         : "Worth a closer look before deciding.";
@@ -153,9 +165,6 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
                 </span>
               </a>
             </Button>
-            <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
-              <Link href="/listings">Back to list</Link>
-            </Button>
           </div>
         </div>
       </header>
@@ -166,7 +175,7 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Summary</div>
             <div className="mt-3 space-y-2">
               <div className="flex items-center gap-2 text-base font-semibold">
-                {goodForFlipping ? (
+                {goodDeal ? (
                   <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden />
                 ) : hardBlocked ? (
                   <XCircle className="h-5 w-5 text-rose-500" aria-hidden />
@@ -192,8 +201,16 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
                 <span className="font-mono text-xs">{belowMarketCopy}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">Est. profit</span>
-                <span className="font-mono">{formatPhp(listing.est_profit_php ?? null)}</span>
+                <span className="text-muted-foreground">Est. savings</span>
+                <span className="font-mono">
+                  {profit != null && profit > 0 ? (
+                    <>
+                      Save {formatPhp(profit)}
+                    </>
+                  ) : (
+                    formatPhp(profit)
+                  )}
+                </span>
               </div>
             </div>
           </section>

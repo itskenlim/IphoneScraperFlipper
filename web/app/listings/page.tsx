@@ -2,7 +2,9 @@ import Link from "next/link";
 import { unstable_cache } from "next/cache";
 
 import { BatteryHealthPill, PublicListingChecklist } from "@/components/listing-signal-pills";
+import { ListingRowChevron, ListingRowLink } from "@/components/listing-row-link";
 import { ListingsPageLink, ListingsSortToggle } from "@/components/listings-sort-toggle";
+import { LinkPendingBusy, LinkPendingDetailsCue } from "@/components/nav-pending";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,6 +78,9 @@ function buildRedFlags(value: unknown): string[] {
 
   if (flags.icloud_lock) warnings.push("iCloud / reset risk");
   if (flags.wanted_post) warnings.push("Buyer/wanted post");
+  if (flags.for_parts) warnings.push("For parts / repair / AS-IS");
+  if (flags.dead_unit) warnings.push("Doesn't turn on / dead unit");
+  if (flags.water_damage) warnings.push("Water damage");
   if (flags.price_too_low) warnings.push("Tikalon price check");
   if (flags.audio_issue) warnings.push("Audio issue");
   if (flags.face_id_not_working) warnings.push("Face ID not working");
@@ -159,7 +164,7 @@ export default async function Home({
       .sort((a, b) => b - a)[0] || null;
   const hasDeals = filteredItems.some((row) => showDeal(row));
   const showDealColumn = sortMode === "deals" || hasDeals;
-  const sortLabel = sortMode === "deals" ? "profit" : "latest";
+  const sortLabel = sortMode === "deals" ? "best deals" : "latest";
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -214,7 +219,7 @@ export default async function Home({
               id="nearby"
               name="nearby"
               defaultValue={params.nearby}
-              title="Nearby = Bacolod, Silay, Guimaras"
+              title="Nearby = Iloilo area, Silay, Guimaras"
               className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10"
             >
               <option value="1">Includes nearby</option>
@@ -255,8 +260,7 @@ export default async function Home({
         <CardHeader>
           <CardTitle>Listings</CardTitle>
           <CardDescription>
-            Total listings (est.): {totalListings != null ? totalListings.toLocaleString() : "—"} • Click any row to view
-            details, description, and the Facebook link.
+            Total listings (est.): {totalListings != null ? totalListings.toLocaleString() : "—"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -280,8 +284,16 @@ export default async function Home({
                       <Link
                         key={row.listing_id}
                         href={`/item/${encodeURIComponent(row.listing_id)}`}
-                        className="block rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm transition-colors active:bg-muted/40"
+                        aria-label={`View details for ${row.public_title}`}
+                        className={[
+                          "group relative block cursor-pointer touch-manipulation rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm",
+                          "transition-colors duration-200",
+                          "hover:border-primary/40 hover:bg-muted/30",
+                          "active:border-primary/50 active:bg-muted/50",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        ].join(" ")}
                       >
+                        <LinkPendingBusy />
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2 text-sm font-medium leading-snug">
@@ -326,8 +338,11 @@ export default async function Home({
                               <span className={confidenceClass}>{confidenceText}</span>
                             </span>
                             <span className="text-[11px] font-medium text-foreground">
-                              Est. profit{" "}
-                              <span className="font-mono">{formatPhp(profit)}</span>
+                              {profit != null && profit > 0 ? (
+                                <>
+                                  Save <span className="font-mono">{formatPhp(profit)}</span>
+                                </>
+                              ) : null}
                             </span>
                           </div>
                         ) : sortMode === "deals" ? (
@@ -339,11 +354,11 @@ export default async function Home({
                         ) : null}
 
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                          <span className="font-mono break-all">id={row.listing_id}</span>
                           <span className="font-mono whitespace-nowrap">
                             {formatRelativeAge(row.posted_at || row.first_seen_at, nowMs)}
                             {!row.posted_at ? " (est.)" : ""}
                           </span>
+                          <LinkPendingDetailsCue />
                         </div>
                       </Link>
                     );
@@ -361,6 +376,9 @@ export default async function Home({
                       {showDealColumn ? <TableHead className="whitespace-nowrap">Deal</TableHead> : null}
                       <TableHead>Status</TableHead>
                       <TableHead className="whitespace-nowrap">Posted</TableHead>
+                      <TableHead className="w-10">
+                        <span className="sr-only">Open</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -377,39 +395,37 @@ export default async function Home({
                         const shownRedFlags = redFlags.slice(0, 6);
                         const extraRedFlags = redFlags.length - shownRedFlags.length;
                         return (
-                      <TableRow key={row.listing_id}>
+                      <ListingRowLink
+                        key={row.listing_id}
+                        href={`/item/${encodeURIComponent(row.listing_id)}`}
+                        label={`View details for ${row.public_title}`}
+                      >
                         <TableCell className="min-w-[320px] max-w-[420px]">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link
-                              href={`/item/${encodeURIComponent(row.listing_id)}`}
-                              className="font-medium hover:underline hover:underline-offset-4"
-                            >
-                              {row.public_title}
-                            </Link>
+                          <div className="font-medium text-foreground transition-colors duration-200 group-hover:text-primary">
+                            {row.public_title}
                           </div>
-                        <div className="mt-1 font-mono text-[11px] text-muted-foreground">id={row.listing_id}</div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <BatteryHealthPill batteryHealth={row.battery_health} />
-                        </div>
-                        <div className="mt-2">
-                          <PublicListingChecklist riskFlags={row.risk_flags} openline={row.openline} />
-                        </div>
-                        {shownRedFlags.length ? (
-                          <div className="mt-3 rounded-lg border border-rose-500/60 bg-rose-500/5 p-2 text-[11px] text-muted-foreground">
-                            <div className="flex items-center gap-2 font-medium text-rose-300">
-                              <Flag className="h-3 w-3" aria-hidden />
-                              Red Flags
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <BatteryHealthPill batteryHealth={row.battery_health} />
+                          </div>
+                          <div className="mt-2">
+                            <PublicListingChecklist riskFlags={row.risk_flags} openline={row.openline} />
+                          </div>
+                          {shownRedFlags.length ? (
+                            <div className="mt-3 rounded-lg border border-rose-500/60 bg-rose-500/5 p-2 text-[11px] text-muted-foreground">
+                              <div className="flex items-center gap-2 font-medium text-rose-300">
+                                <Flag className="h-3 w-3" aria-hidden />
+                                Red Flags
+                              </div>
+                              <ul className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 list-disc pl-4">
+                                {shownRedFlags.map((flag) => (
+                                  <li key={flag}>{flag}</li>
+                                ))}
+                                {extraRedFlags > 0 ? (
+                                  <li className="col-span-2 text-muted-foreground">+{extraRedFlags} more</li>
+                                ) : null}
+                              </ul>
                             </div>
-                            <ul className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 list-disc pl-4">
-                              {shownRedFlags.map((flag) => (
-                                <li key={flag}>{flag}</li>
-                              ))}
-                              {extraRedFlags > 0 ? (
-                                <li className="col-span-2 text-muted-foreground">+{extraRedFlags} more</li>
-                              ) : null}
-                            </ul>
-                          </div>
-                        ) : null}
+                          ) : null}
                         </TableCell>
                         <TableCell className="whitespace-nowrap font-mono">{formatPhp(row.price_php)}</TableCell>
                         <TableCell className="max-w-[200px] truncate" title={row.location_raw || ""}>
@@ -429,8 +445,11 @@ export default async function Home({
                                   <span className={confidenceClass}>{confidenceText}</span>
                                 </div>
                                 <div className="text-[11px] font-medium text-foreground">
-                                  Est. profit{" "}
-                                  <span className="font-mono">{formatPhp(profit)}</span>
+                                  {profit != null && profit > 0 ? (
+                                    <>
+                                      Save <span className="font-mono">{formatPhp(profit)}</span>
+                                    </>
+                                  ) : null}
                                 </div>
                               </div>
                             ) : sortMode === "deals" ? (
@@ -445,7 +464,10 @@ export default async function Home({
                           </span>
                           {!row.posted_at ? <span className="ml-2 text-[11px] text-muted-foreground">(est.)</span> : null}
                         </TableCell>
-                      </TableRow>
+                        <TableCell className="w-10">
+                          <ListingRowChevron />
+                        </TableCell>
+                      </ListingRowLink>
                         );
                       })()
                     ))}

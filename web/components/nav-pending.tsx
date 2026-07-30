@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
-import { Loader2 } from "lucide-react";
+import { ChevronRight, Loader2 } from "lucide-react";
 
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,40 @@ export function LinkPendingLabel({
       <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
       <span>{pendingLabel}</span>
     </span>
+  );
+}
+
+/** Compact pending cue for listing cards (Details → / spinner). */
+export function LinkPendingDetailsCue() {
+  const { pending } = useLinkStatus();
+  if (pending) {
+    return (
+      <span className="inline-flex items-center gap-1.5 font-medium text-primary" aria-live="polite">
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
+        Opening…
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 font-medium text-primary">
+      Details
+      <ChevronRight
+        className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5 group-active:translate-x-0.5"
+        aria-hidden
+      />
+    </span>
+  );
+}
+
+/** Dim overlay while a parent Link is navigating — discourages double-taps. */
+export function LinkPendingBusy({ className }: { className?: string }) {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+  return (
+    <span
+      className={cn("pointer-events-none absolute inset-0 z-[2] rounded-[inherit] bg-background/40", className)}
+      aria-hidden
+    />
   );
 }
 

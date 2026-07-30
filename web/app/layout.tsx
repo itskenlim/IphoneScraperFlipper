@@ -20,8 +20,8 @@ const fontMono = Fira_Code({
 });
 
 export const metadata: Metadata = {
-  title: "IAASE Dashboard",
-  description: "Public iPhone Marketplace listings dashboard with deal scores and red flags."
+  title: "IAASE — Affordable iPhones in Iloilo",
+  description: "Find fair-priced Marketplace iPhones in Iloilo with deal scores, savings estimates, and risk flags."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -40,7 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div className="space-y-1">
                   <div className="text-[11px] uppercase tracking-wide text-muted-foreground">IAASE</div>
                   <div className="text-xs text-muted-foreground">
-                    Public listings intelligence for Iloilo + nearby. Open MVP — no login required.
+                    iPhone listings for Iloilo and nearby.
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">

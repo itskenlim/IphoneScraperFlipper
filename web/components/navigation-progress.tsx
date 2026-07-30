@@ -47,8 +47,14 @@ export function NavigationProgress() {
       setActive(true);
     };
 
+    const onProgrammatic = () => setActive(true);
+
     document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
+    window.addEventListener("iaase:navigate", onProgrammatic);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener("iaase:navigate", onProgrammatic);
+    };
   }, []);
 
   useEffect(() => {

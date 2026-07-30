@@ -248,6 +248,12 @@ export function ListingSignalPills({
       title: "iCloud / activation / reset risk",
       icon: CloudOff,
       tone: "bad"
+    },
+    (flags.for_parts || flags.dead_unit || flags.water_damage) && {
+      label: "Parts",
+      title: "For parts / dead / water damage — not a usable phone",
+      icon: Wrench,
+      tone: "bad"
     }
   ].filter(Boolean) as PillProps[];
 

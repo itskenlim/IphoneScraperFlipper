@@ -14,25 +14,25 @@ const previewRiskFlags = {
 };
 
 const stats = [
-  { label: "Deal scoring", value: "Find good deals", helper: "Spot underpriced listings fast" },
-  { label: "Risk checks", value: "Avoid risky phones", helper: "Face ID, screen, locks, and more" },
-  { label: "Fresh watchlist", value: "Stay ahead", helper: "Listings checked on a schedule" }
+  { label: "Fair prices", value: "Find cheaper phones", helper: "See what’s priced below typical" },
+  { label: "Risk checks", value: "Buy with more confidence", helper: "Face ID, screen, locks, and more" },
+  { label: "Fresh listings", value: "Catch deals early", helper: "Listings checked on a schedule" }
 ];
 
 const steps = [
   {
     title: "We scan new listings",
-    description: "Fresh posts show up quickly so you can move first.",
+    description: "Fresh posts from Iloilo Marketplace show up quickly.",
     icon: Radar
   },
   {
     title: "We check price and condition",
-    description: "We compare similar listings to estimate real value.",
+    description: "We compare similar phones so you can tell if the price is fair.",
     icon: ShieldCheck
   },
   {
-    title: "We show if it’s a good deal",
-    description: "We highlight issues like Face ID, screen, and locks.",
+    title: "We flag risks and savings",
+    description: "See red flags and how much you might save vs typical prices.",
     icon: BadgePercent
   }
 ];
@@ -43,12 +43,12 @@ const benefits = [
     description: "See red flags early so you avoid costly mistakes."
   },
   {
-    title: "Compare prices instantly",
-    description: "We estimate real value so you don’t overpay."
+    title: "Know if the price is fair",
+    description: "We compare similar listings so you don’t overpay."
   },
   {
-    title: "Find underpriced phones faster",
-    description: "Move quickly when a good deal appears."
+    title: "Find cheaper iPhones faster",
+    description: "Great for students and anyone shopping on a budget."
   },
   {
     title: "See only fresh listings",
@@ -62,11 +62,11 @@ export default function Home() {
       <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
         <div className="space-y-5">
           <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
-            Spot underpriced iPhones before others do.
+            Find affordable iPhones in Iloilo — without the guesswork.
           </h1>
           <p className="max-w-xl text-base text-muted-foreground sm:text-lg">
-            Real-time marketplace intelligence that scores listings, estimates market value, and flags
-            hidden issues.
+            Compare Marketplace prices, estimate how much you can save, and spot risky phones before you
+            message the seller.
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
             <NavButtonLink href="/listings" className="min-w-[160px]" pendingLabel="Opening listings…">
@@ -78,19 +78,20 @@ export default function Home() {
         <Card className="relative overflow-hidden border-border/70 bg-card/80 shadow-[0_0_30px_rgba(37,99,235,0.12)]">
           <CardHeader className="space-y-1">
             <CardTitle className="text-lg">Live Preview</CardTitle>
-            <CardDescription>See if it’s worth messaging.</CardDescription>
+            <CardDescription>See if the price looks fair.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold">iPhone 12 Pro 128GB</div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span>Bacolod City, PH-06 · active</span>
+                  <span>Iloilo City · active</span>
                   <Badge
                     variant="outline"
-                      className="border-border bg-muted/40 text-[11px] text-muted-foreground">
-                         Just posted
-                      </Badge>
+                    className="border-border bg-muted/40 text-[11px] text-muted-foreground"
+                  >
+                    Just posted
+                  </Badge>
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1">
@@ -102,15 +103,15 @@ export default function Home() {
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className="rounded-lg border border-border bg-muted/30 p-2">
-                <div className="text-muted-foreground">Below average price</div>
+                <div className="text-muted-foreground">Below typical</div>
                 <div className="font-mono text-sm">22%</div>
               </div>
               <div className="rounded-lg border border-border bg-muted/30 p-2">
-                <div className="text-muted-foreground">Estimated profit</div>
-                <div className="font-mono text-sm">₱1,500</div>
+                <div className="text-muted-foreground">Est. savings</div>
+                <div className="font-mono text-sm">Save ₱1,500</div>
               </div>
               <div className="rounded-lg border border-border bg-muted/30 p-2">
-                <div className="text-muted-foreground">Good Deal?</div>
+                <div className="text-muted-foreground">Good deal?</div>
                 <div className="font-mono text-sm">Yes</div>
               </div>
             </div>
@@ -154,7 +155,7 @@ export default function Home() {
       <section className="space-y-4">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">How it works</h2>
-          <p className="text-sm text-muted-foreground">A tight pipeline that prioritizes speed and trust.</p>
+          <p className="text-sm text-muted-foreground">Built for buyers shopping local Marketplace phones.</p>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           {steps.map((step) => (
@@ -173,7 +174,9 @@ export default function Home() {
       <section className="space-y-4">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">Why it helps</h2>
-          <p className="text-sm text-muted-foreground">Everything you need to flip safely and fast.</p>
+          <p className="text-sm text-muted-foreground">
+            Useful whether you’re a student on a budget or just want a fair local deal.
+          </p>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           {benefits.map((benefit) => (
@@ -194,12 +197,12 @@ export default function Home() {
         <Card className="border-border/70 bg-card/70">
           <CardHeader>
             <CardTitle>Built on real marketplace data</CardTitle>
-            <CardDescription>Decision support you can trust.</CardDescription>
+            <CardDescription>Local price context you can trust.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Radar className="h-4 w-4 text-primary" aria-hidden />
-              Based on real marketplace data.
+              Based on real Iloilo Marketplace listings.
             </div>
             <div className="flex items-center gap-2">
               <BadgePercent className="h-4 w-4 text-primary" aria-hidden />
@@ -214,14 +217,14 @@ export default function Home() {
 
         <Card className="border-border/70 bg-card/70">
           <CardHeader>
-            <CardTitle>Ready to scout deals?</CardTitle>
-            <CardDescription>Jump into the listings and start triaging fast.</CardDescription>
+            <CardTitle>Ready to browse?</CardTitle>
+            <CardDescription>See what’s available near you right now.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <NavButtonLink href="/listings" className="w-full" pendingLabel="Opening listings…">
               View listings
             </NavButtonLink>
-            <p className="text-xs text-muted-foreground">See what’s worth messaging — before it’s gone.</p>
+            <p className="text-xs text-muted-foreground">Compare prices and risks before you buy.</p>
           </CardContent>
         </Card>
       </section>
