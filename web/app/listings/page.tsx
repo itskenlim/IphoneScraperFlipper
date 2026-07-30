@@ -2,6 +2,7 @@ import Link from "next/link";
 import { unstable_cache } from "next/cache";
 
 import { BatteryHealthPill, PublicListingChecklist } from "@/components/listing-signal-pills";
+import { ListingsPageLink, ListingsSortToggle } from "@/components/listings-sort-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -171,28 +172,11 @@ export default async function Home({
             </p>
           </div>
           <div className="hidden items-center gap-2 sm:flex">
-            <div className="inline-flex rounded-md border border-border bg-background/60 p-1">
-              <Button
-                asChild
-                size="sm"
-                variant={sortMode === "deals" ? "secondary" : "ghost"}
-                className="h-9 px-3 text-xs"
-              >
-                <Link href={buildHref(params, { sort: "deals", page: "1" })} aria-current={sortMode === "deals" ? "page" : undefined}>
-                  Best deals
-                </Link>
-              </Button>
-              <Button
-                asChild
-                size="sm"
-                variant={sortMode === "latest" ? "secondary" : "ghost"}
-                className="h-9 px-3 text-xs"
-              >
-                <Link href={buildHref(params, { sort: "latest", page: "1" })} aria-current={sortMode === "latest" ? "page" : undefined}>
-                  Latest
-                </Link>
-              </Button>
-            </div>
+            <ListingsSortToggle
+              sortMode={sortMode}
+              dealsHref={buildHref(params, { sort: "deals", page: "1" })}
+              latestHref={buildHref(params, { sort: "latest", page: "1" })}
+            />
           </div>
         </div>
       </header>
@@ -246,28 +230,12 @@ export default async function Home({
         </div>
 
         <div className="flex sm:hidden">
-          <div className="inline-flex w-full rounded-md border border-border bg-background/60 p-1">
-            <Button
-              asChild
-              size="sm"
-              variant={sortMode === "deals" ? "secondary" : "ghost"}
-              className="h-9 flex-1 px-3 text-xs"
-            >
-              <Link href={buildHref(params, { sort: "deals", page: "1" })} aria-current={sortMode === "deals" ? "page" : undefined}>
-                Best deals
-              </Link>
-            </Button>
-            <Button
-              asChild
-              size="sm"
-              variant={sortMode === "latest" ? "secondary" : "ghost"}
-              className="h-9 flex-1 px-3 text-xs"
-            >
-              <Link href={buildHref(params, { sort: "latest", page: "1" })} aria-current={sortMode === "latest" ? "page" : undefined}>
-                Latest
-              </Link>
-            </Button>
-          </div>
+          <ListingsSortToggle
+            sortMode={sortMode}
+            dealsHref={buildHref(params, { sort: "deals", page: "1" })}
+            latestHref={buildHref(params, { sort: "latest", page: "1" })}
+            fullWidth
+          />
         </div>
 
         <input type="hidden" name="page" value="1" />
@@ -287,8 +255,8 @@ export default async function Home({
         <CardHeader>
           <CardTitle>Listings</CardTitle>
           <CardDescription>
-            Total listings (est.): {totalListings != null ? totalListings.toLocaleString() : "—"} • Click any row to view the
-            detail page (login required).
+            Total listings (est.): {totalListings != null ? totalListings.toLocaleString() : "—"} • Click any row to view
+            details, description, and the Facebook link.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -495,27 +463,18 @@ export default async function Home({
           )}
 
           <div className="mt-4 flex items-center justify-between">
-            {data.page <= 1 ? (
-              <Button variant="outline" className="min-w-[120px]" disabled>
-                Prev
-              </Button>
-            ) : (
-              <Button asChild variant="outline" className="min-w-[120px]">
-                <Link href={buildHref(params, { page: String(Math.max(1, data.page - 1)) })}>Prev</Link>
-              </Button>
-            )}
+            <ListingsPageLink
+              href={buildHref(params, { page: String(Math.max(1, data.page - 1)) })}
+              disabled={data.page <= 1}
+            >
+              Prev
+            </ListingsPageLink>
 
             <div className="text-xs text-muted-foreground">Page {data.page}</div>
 
-            {!data.hasMore ? (
-              <Button variant="outline" className="min-w-[120px]" disabled>
-                Next
-              </Button>
-            ) : (
-              <Button asChild variant="outline" className="min-w-[120px]">
-                <Link href={buildHref(params, { page: String(data.page + 1) })}>Next</Link>
-              </Button>
-            )}
+            <ListingsPageLink href={buildHref(params, { page: String(data.page + 1) })} disabled={!data.hasMore}>
+              Next
+            </ListingsPageLink>
           </div>
         </CardContent>
       </Card>

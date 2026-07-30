@@ -74,15 +74,15 @@ Headlines: semibold, tight tracking. Body: short sentences. Prefer one support l
 | Breakpoint | Behavior |
 |------------|----------|
 | `< sm` | Brand + theme + hamburger; links in expand panel |
-| `sm+` | Brand + subtitle · Listings · Login · Theme |
+| `sm+` | Brand + subtitle · Listings · Theme |
 
-Do not put full “View listings” + Login + theme + long subtitle on one mobile row.
+Do not put full “View listings” + theme + long subtitle on one mobile row.
 
 ---
 
 ## Landing structure
 
-1. Hero: brand, one headline, one support line, one primary CTA (+ quiet Login)
+1. Hero: brand, one headline, one support line, one primary CTA (View listings)
 2. Live preview card (product truth)
 3. How it works — 3 compact steps
 4. Why — short bullet list (not a card grid)

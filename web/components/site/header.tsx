@@ -2,13 +2,14 @@
 
 import { useEffect, useId, useState } from "react";
 import Link from "next/link";
-import { LogIn, LogOut, Menu, Moon, Sun, X } from "lucide-react";
+import { Menu, Moon, Sun, X } from "lucide-react";
 import { useTheme } from "next-themes";
 
+import { LinkPendingLabel } from "@/components/nav-pending";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export function SiteHeader({ authed }: { authed: boolean }) {
+export function SiteHeader() {
   const { theme, setTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuId = useId();
@@ -46,7 +47,6 @@ export function SiteHeader({ authed }: { authed: boolean }) {
           <span className="hidden text-xs text-muted-foreground sm:inline">iPhone deals</span>
         </Link>
 
-        {/* Desktop nav */}
         <nav className="hidden items-center gap-1.5 sm:flex" aria-label="Primary">
           <Button
             variant="ghost"
@@ -59,26 +59,12 @@ export function SiteHeader({ authed }: { authed: boolean }) {
             <Moon className={cn("h-4 w-4", theme === "dark" ? "block" : "hidden")} />
           </Button>
           <Button asChild variant="ghost" className="cursor-pointer">
-            <Link href="/listings">Listings</Link>
+            <Link href="/listings" prefetch>
+              <LinkPendingLabel idle="Listings" pendingLabel="Loading…" />
+            </Link>
           </Button>
-          {authed ? (
-            <Button asChild variant="secondary" className="cursor-pointer">
-              <a href="/logout">
-                <LogOut className="h-4 w-4" />
-                Logout
-              </a>
-            </Button>
-          ) : (
-            <Button asChild variant="secondary" className="cursor-pointer">
-              <Link href="/login">
-                <LogIn className="h-4 w-4" />
-                Login
-              </Link>
-            </Button>
-          )}
         </nav>
 
-        {/* Mobile: theme + menu only */}
         <div className="flex items-center gap-1 sm:hidden">
           <Button
             variant="ghost"
@@ -114,28 +100,12 @@ export function SiteHeader({ authed }: { authed: boolean }) {
           <div className="mx-auto flex max-w-6xl flex-col gap-1 px-3 py-3">
             <Link
               href="/listings"
+              prefetch
               className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-200 hover:bg-muted"
               onClick={() => setMenuOpen(false)}
             >
-              View listings
+              <LinkPendingLabel idle="View listings" pendingLabel="Loading…" />
             </Link>
-            {authed ? (
-              <a
-                href="/logout"
-                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-200 hover:bg-muted"
-                onClick={() => setMenuOpen(false)}
-              >
-                Logout
-              </a>
-            ) : (
-              <Link
-                href="/login"
-                className="cursor-pointer rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-200 hover:bg-muted"
-                onClick={() => setMenuOpen(false)}
-              >
-                Login
-              </Link>
-            )}
           </div>
         </div>
       ) : null}

@@ -1,9 +1,10 @@
 export default function ListingsLoading() {
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6" role="status" aria-live="polite" aria-busy="true">
+      <p className="sr-only">Loading listings…</p>
       <div className="space-y-2">
         <div className="h-6 w-48 rounded-md bg-muted/60 animate-pulse" />
-        <div className="h-4 w-72 rounded-md bg-muted/40 animate-pulse" />
+        <div className="h-4 w-72 max-w-full rounded-md bg-muted/40 animate-pulse" />
       </div>
 
       <div className="rounded-xl border border-border/70 bg-card/40 p-3 sm:p-4 space-y-3">
@@ -27,3 +28,4 @@ export default function ListingsLoading() {
     </div>
   );
 }
+

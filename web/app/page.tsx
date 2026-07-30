@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { BadgePercent, Clock, Flag, Radar, ShieldCheck } from "lucide-react";
 
 import { ListingSignalPills } from "@/components/listing-signal-pills";
+import { NavButtonLink } from "@/components/nav-pending";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const previewRiskFlags = {
@@ -70,12 +69,9 @@ export default function Home() {
             hidden issues.
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
-            <Button asChild className="min-w-[160px] cursor-pointer">
-              <Link href="/listings">View Listings</Link>
-            </Button>
-            <Button asChild variant="secondary" className="min-w-[120px] cursor-pointer">
-              <Link href="/login">Login</Link>
-            </Button>
+            <NavButtonLink href="/listings" className="min-w-[160px]" pendingLabel="Opening listings…">
+              View Listings
+            </NavButtonLink>
           </div>
         </div>
 
@@ -222,12 +218,9 @@ export default function Home() {
             <CardDescription>Jump into the listings and start triaging fast.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button asChild className="w-full">
-              <Link href="/listings">View listings</Link>
-            </Button>
-            <Button asChild variant="secondary" className="w-full">
-              <Link href="/login">Login</Link>
-            </Button>
+            <NavButtonLink href="/listings" className="w-full" pendingLabel="Opening listings…">
+              View listings
+            </NavButtonLink>
             <p className="text-xs text-muted-foreground">See what’s worth messaging — before it’s gone.</p>
           </CardContent>
         </Card>

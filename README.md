@@ -1,177 +1,181 @@
-# Supabase CLI
+# IAASE — iPhone Marketplace Deal Finder
 
-[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=develop)](https://coveralls.io/github/supabase/cli?branch=develop) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
-](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
+Personal tooling to **discover**, **monitor**, and **score** Facebook Marketplace iPhone listings (Iloilo + nearby), then browse deals in a **public** Next.js dashboard (MVP — no login).
 
-[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
+| Piece | Role |
+|-------|------|
+| **Scraper** (`scraper/`) | Playwright discovery + watchlist monitor → Supabase |
+| **Web** (`web/`) | Public deal board + public listing detail |
+| **Infra** (`infra/systemd/`) | Linux user timers for unattended runs |
 
-This repository contains all the functionality for Supabase CLI.
+---
 
-- [x] Running Supabase locally
-- [x] Managing database migrations
-- [x] Creating and deploying Supabase Functions
-- [x] Generating types directly from your database schema
-- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
+## How it works
 
-## Getting started
+```text
+Facebook Marketplace
+        │
+        ▼
+┌───────────────────┐     ┌──────────────────┐
+│  Discovery job    │────▶│  Supabase        │
+│  (feed + enrich)  │     │  listings /      │
+└───────────────────┘     │  deal_metrics    │
+                          └────────┬─────────┘
+┌───────────────────┐              │
+│  Monitor job      │──────────────┤
+│  (tiered recheck) │              │
+└───────────────────┘              │
+        │                          ▼
+        │                 ┌──────────────────┐
+        └────────────────▶│  Web dashboard   │
+   (price / sold / desc)  │  /listings       │
+                          └──────────────────┘
+```
 
-### Install the CLI
+1. **Discovery** — scan Marketplace search feed, filter noise, enrich new listings (description/condition).
+2. **Monitor** — recheck active watchlist with **tiered scheduling** (hot deals often; cold listings weekly). See [docs/MONITOR_SCHEDULING.md](docs/MONITOR_SCHEDULING.md).
+3. **Deals** — `compute_deals.mjs` scores A/B/C vs comps and surfaces red flags.
+4. **Dashboard** — browse scored listings; detail + Facebook URL are public (MVP).
 
-Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
+**Ops shape:** dual Facebook profiles (discover vs monitor), Playwright **hybrid** (embed/GraphQL + selective DOM), and a dedicated home Linux host over SSH for timers. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## Repo map
+
+```text
+IphoneScraperFlipper/
+├── scraper/                 # Playwright scraper + deal engine
+│   ├── .env.example         # Tuned knobs (no secrets) — copy to .env
+│   ├── scripts/             # run_discover / run_monitor / compute_deals
+│   ├── scraper/             # Core Node modules (playwright_extra, …)
+│   └── sql/                 # Schema migrations (run in Supabase SQL editor)
+├── web/                     # Next.js App Router dashboard
+│   ├── .env.example
+│   └── app/                 # Routes: /, /listings, /item/[id]
+├── infra/systemd/           # User-level discover + monitor timers
+├── docs/                    # Deep-dive docs (scheduling, designs)
+├── AUTOMATION_CHEATSHEET.md # Day-to-day ops on Linux
+├── DESIGN.md                # UI aesthetic (Ops Center Noir adapted for IAASE)
+└── scripts/                 # snapshot_env.sh / restore_env.sh
+```
+
+---
+
+## Quick start
+
+### Prerequisites
+
+- Node.js 20+ (nvm recommended)
+- Supabase project (Postgres)
+- Facebook accounts for Playwright persistent profiles
+- Linux (recommended for systemd automation)
+
+### 1. Clone & install
 
 ```bash
-npm i supabase --save-dev
+git clone <your-repo-url> IphoneScraperFlipper
+cd IphoneScraperFlipper
+
+cd scraper && npm install && cd ..
+cd web && npm install && cd ..
 ```
 
-When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
-
-```
-NODE_OPTIONS=--no-experimental-fetch yarn add supabase
-```
-
-> **Note**
-For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
-
-<details>
-  <summary><b>macOS</b></summary>
-
-  Available via [Homebrew](https://brew.sh). To install:
-
-  ```sh
-  brew install supabase/tap/supabase
-  ```
-
-  To install the beta release channel:
-  
-  ```sh
-  brew install supabase/tap/supabase-beta
-  brew link --overwrite supabase-beta
-  ```
-  
-  To upgrade:
-
-  ```sh
-  brew upgrade supabase
-  ```
-</details>
-
-<details>
-  <summary><b>Windows</b></summary>
-
-  Available via [Scoop](https://scoop.sh). To install:
-
-  ```powershell
-  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
-  scoop install supabase
-  ```
-
-  To upgrade:
-
-  ```powershell
-  scoop update supabase
-  ```
-</details>
-
-<details>
-  <summary><b>Linux</b></summary>
-
-  Available via [Homebrew](https://brew.sh) and Linux packages.
-
-  #### via Homebrew
-
-  To install:
-
-  ```sh
-  brew install supabase/tap/supabase
-  ```
-
-  To upgrade:
-
-  ```sh
-  brew upgrade supabase
-  ```
-
-  #### via Linux packages
-
-  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
-
-  ```sh
-  sudo apk add --allow-untrusted <...>.apk
-  ```
-
-  ```sh
-  sudo dpkg -i <...>.deb
-  ```
-
-  ```sh
-  sudo rpm -i <...>.rpm
-  ```
-
-  ```sh
-  sudo pacman -U <...>.pkg.tar.zst
-  ```
-</details>
-
-<details>
-  <summary><b>Other Platforms</b></summary>
-
-  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
-
-  ```sh
-  go install github.com/supabase/cli@latest
-  ```
-
-  Add a symlink to the binary in `$PATH` for easier access:
-
-  ```sh
-  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
-  ```
-
-  This works on other non-standard Linux distros.
-</details>
-
-<details>
-  <summary><b>Community Maintained Packages</b></summary>
-
-  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
-  To install in your working directory:
-
-  ```bash
-  pkgx install supabase
-  ```
-
-  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
-</details>
-
-### Run the CLI
+### 2. Environment
 
 ```bash
-supabase bootstrap
+cp scraper/.env.example scraper/.env
+cp web/.env.example web/.env.local
+# Fill SUPABASE_* and auth secrets in both files
 ```
 
-Or using npx:
+After wiping env files later:
 
 ```bash
-npx supabase bootstrap
+bash scripts/snapshot_env.sh   # backup working envs (gitignored)
+bash scripts/restore_env.sh    # restore from backups
 ```
 
-The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
+### 3. Database
 
-## Docs
+Apply SQL under `scraper/sql/` in the Supabase SQL editor as needed (including `add_monitor_schedule_columns.sql` if monitor schedule columns are missing).
 
-Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
+### 4. Bootstrap Facebook login (once per profile)
 
-## Breaking changes
-
-We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
-
-However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
-
-## Developing
-
-To run from source:
-
-```sh
-# Go >= 1.22
-go run . help
+```bash
+cd scraper
+bash scripts/bootstrap_login.sh discover
+bash scripts/bootstrap_login.sh monitor
 ```
+
+### 5. Smoke test
+
+```bash
+cd scraper
+bash scripts/run_discover.sh
+bash scripts/run_monitor.sh
+bash scripts/run_compute_deals.sh
+```
+
+```bash
+cd web
+npm run dev
+# http://localhost:3000
+```
+
+---
+
+## Automation (Linux)
+
+See **[AUTOMATION_CHEATSHEET.md](AUTOMATION_CHEATSHEET.md)** and **[infra/systemd/README.md](infra/systemd/README.md)**.
+
+Default cadence (local time):
+
+| Job | Schedule |
+|-----|----------|
+| Discover | Hourly `07:00`–`23:00` + midnight |
+| Monitor | Every **3 hours** `07:05`–`22:05` + `00:05` |
+| Night | Quiet `01:00`–`06:59` |
+| Deals | After each job (`ExecStartPost`) |
+
+```bash
+chmod +x scraper/scripts/run_*.sh scraper/scripts/bootstrap_login.sh scripts/*.sh
+mkdir -p ~/.config/systemd/user
+cp infra/systemd/iaase-*.service infra/systemd/iaase-*.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now iaase-discover.timer
+systemctl --user enable --now iaase-monitor.timer
+loginctl enable-linger "$USER"   # optional: keep timers after logout
+```
+
+Telegram login alerts: set `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` in `scraper/.env`.
+
+---
+
+## Documentation index
+
+| Doc | What it’s for |
+|-----|----------------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Dual accounts, hybrid scrape, home Linux SSH host |
+| [AUTOMATION_CHEATSHEET.md](AUTOMATION_CHEATSHEET.md) | Timers, logs, re-login, env backup |
+| [docs/MONITOR_SCHEDULING.md](docs/MONITOR_SCHEDULING.md) | Hot/warm/cold monitor tiers + env knobs |
+| [infra/systemd/README.md](infra/systemd/README.md) | Installing systemd units |
+| [scraper/COMMANDS.md](scraper/COMMANDS.md) | npm scripts for discover / monitor / deals |
+| [web/README.md](web/README.md) | Dashboard routes, Vercel, auth notes |
+| [DESIGN.md](DESIGN.md) | UI direction and density rules |
+| [TODO_LIST.md](TODO_LIST.md) | Known product follow-ups |
+
+---
+
+## Security notes
+
+- Never commit `.env`, `.env.local`, or Playwright profile dirs.
+- Never expose `SUPABASE_SERVICE_ROLE_KEY` to the browser (`NEXT_PUBLIC_*`).
+- Web dashboard is a **public MVP** (listing details and Facebook links are open). Re-add auth later if needed.
+- Run discover/monitor automation on **one host** at a time against the same DB.
+
+---
+
+## License / status
+
+Personal project — not affiliated with Facebook or Meta. Use responsibly and within Marketplace terms.
