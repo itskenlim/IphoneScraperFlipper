@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { detectIssues, hasIcloudRisk } from "./deal_text.mjs";
+import { detectIssues, hasIcloudRisk, hasForPartsRisk, hasDeadUnitSignal, hasWaterDamageSignal } from "./deal_text.mjs";
 
 function pick(issues, keys) {
   return keys.reduce((acc, key) => {
@@ -313,4 +313,53 @@ test("back glass replacement slang suppresses crack", () => {
     pick(issues2, ["back_glass_replaced"]),
     { back_glass_replaced: true }
   );
+});
+
+test("dead unit English phrases are detected", () => {
+  assert.equal(hasDeadUnitSignal("Doesn't turn on"), true);
+  assert.equal(hasDeadUnitSignal("wont turn on"), true);
+  assert.equal(hasDeadUnitSignal("no power"), true);
+  assert.equal(hasDeadUnitSignal("no power brick included"), false);
+  assert.equal(hasDeadUnitSignal("dead phone for sale"), true);
+});
+
+test("Hiligaynon / typo open variants are detected", () => {
+  assert.equal(hasDeadUnitSignal("di mag open"), true);
+  assert.equal(hasDeadUnitSignal("indi mag bukas"), true);
+  assert.equal(hasDeadUnitSignal("indi ma open"), true);
+  assert.equal(hasDeadUnitSignal("indima open"), true);
+  assert.equal(hasDeadUnitSignal("indi na ma open"), true);
+  assert.equal(hasDeadUnitSignal("wala gagana"), true);
+  assert.equal(hasDeadUnitSignal("indi na gagana"), true);
+});
+
+test("parts out / for repair / AS-IS are for_parts", () => {
+  assert.equal(hasForPartsRisk("parts out only"), true);
+  assert.equal(hasForPartsRisk("partsout"), true);
+  assert.equal(hasForPartsRisk("Issue / For Repair"), true);
+  assert.equal(hasForPartsRisk("Selling AS IS – ideal for repair, parts, or technicians"), true);
+  assert.equal(hasForPartsRisk("iPhone 13 128gb openline all working"), false);
+});
+
+test("water damage signals", () => {
+  assert.equal(hasWaterDamageSignal("Phone was dropped and got wet"), true);
+  assert.equal(hasWaterDamageSignal("water damage"), true);
+  assert.equal(hasWaterDamageSignal("nalubog sa tubig"), true);
+});
+
+test("sample dead water-damaged listing is hard for_parts", () => {
+  const text = `FOR SALE: iPhone 11 Pro Max 256GB (Midnight Green)
+Issue / For Repair
+Doesn't turn on
+Changed LCD
+Changed battery
+Phone was dropped and got wet
+Selling AS IS – ideal for repair, parts, or technicians.`;
+  const issues = detectIssues(text);
+  assert.equal(hasForPartsRisk(text), true);
+  assert.equal(issues.for_parts, true);
+  assert.equal(issues.dead_unit, true);
+  assert.equal(issues.water_damage, true);
+  assert.equal(issues.battery_replaced, true);
+  assert.equal(issues.lcd_replaced, true);
 });

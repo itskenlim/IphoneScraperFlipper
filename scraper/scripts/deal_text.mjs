@@ -60,7 +60,11 @@ const FEATURE_RULES = {
     singles: ["lcd", "oled", "display", "servicecenter"],
     collapsed: ["lcd", "oled", "display", "appleservicecenter", "servicecenter"],
     positives: ["orig", "original"],
-    negatives: ["replace", "replaced", "replacement", "palit", "pinalitan", "ilis", "isli", "pullout", "incell"],
+    negatives: [
+      "replace", "replaced", "replacement",
+      "change", "changed", "nachange",
+      "palit", "pinalitan", "ilis", "isli", "pullout", "incell"
+    ],
     allowFallbackWorking: false
   },
   back_glass: {
@@ -358,7 +362,12 @@ export function detectIssues(text) {
       camera_issue: false,
       screen_issue: false,
       network_locked: false,
-      wifi_only: false
+      wifi_only: false,
+      button_issue: false,
+      audio_issue: false,
+      for_parts: false,
+      water_damage: false,
+      dead_unit: false
     };
   }
 
@@ -489,6 +498,10 @@ export function detectIssues(text) {
   const buttonNegative =
     button.negative && !(powerAccessoryMention && !buttonFeatureMention);
 
+  const forParts = hasForPartsRisk(views.raw);
+  const waterDamage = hasWaterDamageSignal(views.raw);
+  const deadUnit = hasDeadUnitSignal(views.raw);
+
   return {
     face_id_working: faceWorking,
     face_id_not_working: !!faceNotWorking,
@@ -506,8 +519,152 @@ export function detectIssues(text) {
     network_locked: networkNegative,
     wifi_only: !!wifi.negative && views.lower.includes("wifi"),
     button_issue: !!buttonNegative,
-    audio_issue: !!audio.negative
+    audio_issue: !!audio.negative,
+    for_parts: forParts,
+    water_damage: waterDamage,
+    dead_unit: deadUnit
   };
+}
+
+/**
+ * Dead / won't power on — English + Hiligaynon/Ilonggo + common typos.
+ * Avoids "no power brick/charger" accessory phrasing.
+ */
+export function hasDeadUnitSignal(text) {
+  const raw = String(text || "");
+  if (!raw) return false;
+  const s = raw.toLowerCase();
+  const collapsed = s.replace(/[^a-z0-9]+/g, "");
+
+  const patterns = [
+    /\bdoesn'?t\s+turn\s+on\b/i,
+    /\bdoes\s+not\s+turn\s+on\b/i,
+    /\bdon'?t\s+turn\s+on\b/i,
+    /\bwont\s+turn\s+on\b/i,
+    /\bwon'?t\s+turn\s+on\b/i,
+    /\bwill\s+not\s+turn\s+on\b/i,
+    /\bcan'?t\s+turn\s+on\b/i,
+    /\bcannot\s+turn\s+on\b/i,
+    /\bnot\s+turning\s+on\b/i,
+    /\bno\s+power\b(?!\s*(?:brick|adapter|charger|cable|cord|bank))/i,
+    /\bdead\s+(?:phone|unit|board|motherboard|logic\s*board)\b/i,
+    /\b(?:phone|unit)\s+is\s+dead\b/i,
+    // Hiligaynon / Taglish: won't open / won't boot
+    /\bdi\s*ma?g?\s*[- ]?\s*open\b/i,
+    /\bindi\s*ma?g?\s*[- ]?\s*open\b/i,
+    /\bindima\s*open\b/i,
+    /\bindi\s*na\s*ma\s*open\b/i,
+    /\bdi\s*na\s*ma\s*open\b/i,
+    /\bindi\s*na\s*mag\s*open\b/i,
+    /\bdi\s*na\s*mag\s*open\b/i,
+    /\bindi\s*mag\s*bukas\b/i,
+    /\bdi\s*mag\s*bukas\b/i,
+    /\bindi\s*ma\s*bukas\b/i,
+    /\bdi\s*ma\s*bukas\b/i,
+    /\bwala\s*gagana\b/i,
+    /\bwala\s*na\s*gagana\b/i,
+    /\bwala\s*nagana\b/i,
+    /\bindi\s*na\s*gagana\b/i,
+    /\bdi\s*na\s*gagana\b/i,
+    /\bindi\s*gagana\b/i,
+    /\bdi\s*gagana\b/i
+  ];
+  if (patterns.some((re) => re.test(s))) return true;
+
+  const collapsedHits = [
+    "doesntturnon",
+    "dontturnon",
+    "wontturnon",
+    "cannotturnon",
+    "cantturnon",
+    "dimaopen",
+    "dimagopen",
+    "indimaopen",
+    "indimagopen",
+    "indinamaopen",
+    "dinamaopen",
+    "indimagbukas",
+    "dimagbukas",
+    "walagagana",
+    "walanagagana",
+    "indinagagana",
+    "dinagagana"
+  ];
+  return collapsedHits.some((tok) => collapsed.includes(tok));
+}
+
+/** Water / liquid damage signals (EN + local). */
+export function hasWaterDamageSignal(text) {
+  const raw = String(text || "");
+  if (!raw) return false;
+  const s = raw.toLowerCase();
+  const collapsed = s.replace(/[^a-z0-9]+/g, "");
+
+  const patterns = [
+    /\bgot\s+wet\b/i,
+    /\bwater\s*damage(?:d)?\b/i,
+    /\bliquid\s*damage(?:d)?\b/i,
+    /\bdropped\s+and\s+got\s+wet\b/i,
+    /\bnalubog\b/i,
+    /\bnaay\s+tubig\b/i,
+    /\bmay\s+tubig\b/i,
+    /\bna\s*wet\b/i,
+    /\bnabasaan\b/i,
+    /\btubig\b[^\n]{0,16}\b(?:sulod|inside|damage)\b/i
+  ];
+  if (patterns.some((re) => re.test(s))) return true;
+
+  return ["waterdamage", "waterdamaged", "liquiddamage", "gotwet", "nawet", "nalubog"].some((tok) =>
+    collapsed.includes(tok)
+  );
+}
+
+/**
+ * For-parts / for-repair / AS-IS listings — not a usable phone deal.
+ * Combines explicit parts language + dead unit / water damage.
+ */
+export function hasForPartsRisk(text) {
+  const raw = String(text || "");
+  if (!raw) return false;
+  const s = raw.toLowerCase();
+  const collapsed = s.replace(/[^a-z0-9]+/g, "");
+
+  // Explicit "no repair" (working unit) — still allow dead/water checks below.
+  const explicitParts = [
+    /\bfor\s*repair\b/i,
+    /\bfor\s*parts?\b/i,
+    /\bparts?\s*out\b/i,
+    /\bpartsout\b/i,
+    /\bas[-\s]?is\b/i,
+    /\bspare\s*parts?\b/i,
+    /\bfor\s*technicians?\b/i,
+    /\bideal\s+for\s+(?:repair|parts?|technicians?)\b/i,
+    /\bselling\s+as[-\s]?is\b/i,
+    /\brepair\s+only\b/i,
+    /\bparts?\s+only\b/i,
+    // Hiligaynon / Taglish
+    /\bpara\s+(?:sa\s+)?(?:repair|parts?|technicians?)\b/i,
+    /\bpara\s+parts?\b/i
+  ];
+  if (explicitParts.some((re) => re.test(s))) return true;
+
+  const collapsedParts = [
+    "forrepair",
+    "forparts",
+    "forpart",
+    "partsout",
+    "partsoutonly",
+    "spareparts",
+    "asis",
+    "sellingasis",
+    "pararepair",
+    "paraparts"
+  ];
+  if (collapsedParts.some((tok) => collapsed.includes(tok))) return true;
+
+  if (hasDeadUnitSignal(raw)) return true;
+  if (hasWaterDamageSignal(raw)) return true;
+  return false;
 }
 
 export function hasIcloudRisk(text) {

@@ -3,7 +3,7 @@ import process from "node:process";
 import { createClient } from "@supabase/supabase-js";
 
 import { loadDotenv } from "../scraper/env.mjs";
-import { detectIssues, buildDebugReasons, hasIcloudRisk } from "./deal_text.mjs";
+import { detectIssues, buildDebugReasons, hasIcloudRisk, hasForPartsRisk } from "./deal_text.mjs";
 import { parseStorageGb } from "./parse_storage.mjs";
 
 loadDotenv();
@@ -345,6 +345,9 @@ async function main() {
     const riskFlags = {
       icloud_lock: hasIcloudRisk(text) || null,
       wanted_post: looksLikeWantedPost(title) || null,
+      for_parts: hasForPartsRisk(text) || issues.for_parts || null,
+      dead_unit: issues.dead_unit || null,
+      water_damage: issues.water_damage || null,
       face_id_working: issues.face_id_working || null,
       face_id_not_working: issues.face_id_not_working || null,
       trutone_working: issues.trutone_working || null,
@@ -482,7 +485,13 @@ async function main() {
     const p75 = sampleSize >= 3 ? quantile(iqrPrices, 0.75) : null;
 
     const asking = c.price_php != null && Number.isFinite(c.price_php) ? Number(c.price_php) : null;
-    const hardBlock = !!(c.risk_flags?.icloud_lock || c.risk_flags?.wanted_post);
+    const hardBlock = !!(
+      c.risk_flags?.icloud_lock ||
+      c.risk_flags?.wanted_post ||
+      c.risk_flags?.for_parts ||
+      c.risk_flags?.dead_unit ||
+      c.risk_flags?.water_damage
+    );
     const hasCriticalIssue = !!(
       c.risk_flags?.face_id_not_working ||
       c.risk_flags?.screen_issue ||
@@ -535,6 +544,12 @@ async function main() {
     if (hardBlock) {
       if (c.risk_flags?.wanted_post) addReason("❌ Looks like a buyer / wanted post (LF/WTB/Buying)");
       if (c.risk_flags?.icloud_lock) addReason("❌ High risk keywords found (iCloud/locked/bypass/reset/not safe to reset)");
+      if (c.risk_flags?.for_parts || c.risk_flags?.dead_unit || c.risk_flags?.water_damage) {
+        addReason("❌ For parts / dead / water-damaged — not a usable phone deal");
+      }
+      if (c.risk_flags?.dead_unit) addReason("❌ Unit does not turn on / no power");
+      if (c.risk_flags?.water_damage) addReason("❌ Water / liquid damage mentioned");
+      if (c.risk_flags?.for_parts) addReason("❌ Listed for repair, parts, or AS-IS");
     }
 
     if (!hardBlock && belowMarketPct != null) {
