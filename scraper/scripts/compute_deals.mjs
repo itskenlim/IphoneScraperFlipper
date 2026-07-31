@@ -549,7 +549,7 @@ async function main() {
       }
       if (c.risk_flags?.dead_unit) addReason("❌ Unit does not turn on / no power");
       if (c.risk_flags?.water_damage) addReason("❌ Water / liquid damage mentioned");
-      if (c.risk_flags?.for_parts) addReason("❌ Listed for repair, parts, or AS-IS");
+      if (c.risk_flags?.for_parts) addReason("❌ Listed for repair, parts, or technicians");
     }
 
     if (!hardBlock && belowMarketPct != null) {

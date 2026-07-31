@@ -78,7 +78,7 @@ function buildRedFlags(value: unknown): string[] {
 
   if (flags.icloud_lock) warnings.push("iCloud / reset risk");
   if (flags.wanted_post) warnings.push("Buyer/wanted post");
-  if (flags.for_parts) warnings.push("For parts / repair / AS-IS");
+  if (flags.for_parts) warnings.push("For parts / repair");
   if (flags.dead_unit) warnings.push("Doesn't turn on / dead unit");
   if (flags.water_damage) warnings.push("Water damage");
   if (flags.price_too_low) warnings.push("Tikalon price check");

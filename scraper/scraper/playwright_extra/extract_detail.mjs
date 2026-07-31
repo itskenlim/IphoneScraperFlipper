@@ -1,5 +1,14 @@
 import { DETAIL_NOISE_RE, DETAIL_STOP_RE, LISTED_IN_RE, LOCATION_LINE_RE } from "./constants.mjs";
-import { cleanText, extractBestPhpPriceRaw, extractPrice, inferDescription, inferLocation, isPriceOnly } from "./utils.mjs";
+import {
+  cleanText,
+  extractBestPhpPriceRaw,
+  extractPrice,
+  inferDescription,
+  inferLocation,
+  isPriceOnly,
+  isWeakDescription,
+  shouldPreferDescription
+} from "./utils.mjs";
 
 export function looksLikeUnavailableListing(bodyText, debug) {
   const body = String(bodyText || "")
@@ -88,9 +97,77 @@ function pickPrimaryPriceRaw(texts) {
   return null;
 }
 
+function isDetailChromeLine(line, titleClean, priceClean) {
+  const lowered = String(line || "").toLowerCase();
+  if (!lowered) return true;
+  if (DETAIL_NOISE_RE.test(line)) return true;
+  if (lowered === "condition") return true;
+  if (/^(used|new)\s*-\s*/i.test(line)) return true;
+  if (titleClean && lowered === titleClean) return true;
+  if (priceClean && lowered === priceClean) return true;
+  if (isPriceOnly(line)) return true;
+  if (LOCATION_LINE_RE.test(line)) return true;
+  if (/listed .+ in .+/i.test(line)) return true;
+  if (/^just listed$/i.test(lowered)) return true;
+  return false;
+}
+
+/** Collect seller-body lines from Marketplace detail text nodes (pure; unit-testable). */
+export function collectSellerDescriptionLines(texts, { title = null, priceRaw = null, maxLines = 20 } = {}) {
+  const titleClean = (cleanText(title) || "").toLowerCase();
+  const priceClean = (cleanText(priceRaw) || "").toLowerCase();
+  const source = Array.isArray(texts) ? texts : [];
+  const lowered = source.map((t) => String(t || "").trim().toLowerCase());
+
+  let startIdx = lowered.findIndex((t) => t === "details" || t === "detail");
+  if (startIdx < 0) {
+    const conditionIdx = lowered.findIndex((t) => t === "condition");
+    startIdx = conditionIdx >= 0 ? conditionIdx : 0;
+  }
+
+  const seen = new Set();
+  const lines = [];
+  for (let i = startIdx; i < source.length; i += 1) {
+    const line = cleanText(source[i]);
+    if (!line) continue;
+    const key = line.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // Ignore early chrome ("Message seller") before any seller text; stop after we have content.
+    if (DETAIL_STOP_RE.test(line)) {
+      if (lines.length) break;
+      continue;
+    }
+    if (isDetailChromeLine(line, titleClean, priceClean)) continue;
+    if (line.length < 4) continue;
+    lines.push(line);
+    if (lines.length >= maxLines) break;
+  }
+  return lines;
+}
+
+/** Prefer the longest single node that looks like a real seller write-up. */
+export function pickLongestSellerText(texts, { title = null, priceRaw = null, minLength = 48 } = {}) {
+  const titleClean = (cleanText(title) || "").toLowerCase();
+  const priceClean = (cleanText(priceRaw) || "").toLowerCase();
+  let best = null;
+  for (const raw of texts || []) {
+    const line = cleanText(raw);
+    if (!line || line.length < minLength) continue;
+    if (DETAIL_STOP_RE.test(line)) continue;
+    if (isDetailChromeLine(line, titleClean, priceClean)) continue;
+    if (!best || line.length > best.length) best = line;
+  }
+  return best;
+}
+
 export async function extractDetailFieldsFromPage(page, record) {
   const result = await page.evaluate(() => {
-    const nodes = Array.from(document.querySelectorAll("span[dir='auto'], div[dir='auto']"));
+    const nodes = Array.from(
+      document.querySelectorAll(
+        "span[dir='auto'], div[dir='auto'], [data-ad-preview='message'], [role='article'] span, [role='main'] span"
+      )
+    );
     const texts = [];
     const aboveFoldTexts = [];
     const foldBottom = Math.floor(window.innerHeight * 1.6);
@@ -107,7 +184,10 @@ export async function extractDetailFieldsFromPage(page, record) {
     }
     const lowered = texts.map((t) => t.toLowerCase());
     let detailsIndex = lowered.findIndex((t) => t === "details" || t === "detail");
-    if (detailsIndex < 0) detailsIndex = 0;
+    if (detailsIndex < 0) {
+      const conditionIdx = lowered.findIndex((t) => t === "condition");
+      detailsIndex = conditionIdx >= 0 ? conditionIdx : 0;
+    }
     const listedLine = texts.find((t) => /\blisted\b/i.test(t)) || null;
 
     let detailCondition = null;
@@ -124,7 +204,7 @@ export async function extractDetailFieldsFromPage(page, record) {
 
     return {
       allTexts: texts,
-      detailTexts: texts.slice(detailsIndex, detailsIndex + 80),
+      detailTexts: texts.slice(detailsIndex, detailsIndex + 120),
       listedLine,
       aboveFoldTexts: aboveFoldTexts.slice(0, 240),
       detailCondition,
@@ -164,27 +244,11 @@ export async function extractDetailFieldsFromPage(page, record) {
     }
   }
 
-  const titleClean = (cleanText(record.title) || "").toLowerCase();
-  const priceClean = (cleanText(record.price_raw) || "").toLowerCase();
-  const seen = new Set();
-  const lines = [];
-  for (const raw of detailTexts) {
-    const line = cleanText(raw);
-    if (!line) continue;
-    const lowered = line.toLowerCase();
-    if (seen.has(lowered)) continue;
-    seen.add(lowered);
-    if (DETAIL_STOP_RE.test(line)) break;
-    if (DETAIL_NOISE_RE.test(line)) continue;
-    if (lowered === "condition") continue;
-    if (/^(used|new)\s*-\s*/i.test(line)) continue;
-    if (lowered === titleClean || lowered === priceClean) continue;
-    if (isPriceOnly(line)) continue;
-    if (LOCATION_LINE_RE.test(line)) continue;
-    if (line.length < 4) continue;
-    lines.push(line);
-    if (lines.length >= 3) break;
-  }
+  const lines = collectSellerDescriptionLines(detailTexts, {
+    title: record.title,
+    priceRaw: record.price_raw,
+    maxLines: 20
+  });
 
   const loweredAll = allTexts.map((t) => String(t || "").trim().toLowerCase());
   const descriptionLabels = new Set([
@@ -196,30 +260,30 @@ export async function extractDetailFieldsFromPage(page, record) {
   let sectionDescription = null;
   const labelIdx = loweredAll.findIndex((t) => descriptionLabels.has(t));
   if (labelIdx >= 0) {
-    const sectionLines = [];
-    for (let i = labelIdx + 1; i < Math.min(loweredAll.length, labelIdx + 8); i += 1) {
-      const v = cleanText(allTexts[i]);
-      if (!v) continue;
-      const lowered = v.toLowerCase();
-      if (descriptionLabels.has(lowered)) continue;
-      if (DETAIL_NOISE_RE.test(v)) continue;
-      if (DETAIL_STOP_RE.test(v)) break;
-      if (lowered === titleClean || lowered === priceClean) continue;
-      if (isPriceOnly(v)) continue;
-      if (LOCATION_LINE_RE.test(v)) continue;
-      if (v.length < 4) continue;
-      sectionLines.push(v);
-      if (sectionLines.length >= 3) break;
-    }
+    const sectionLines = collectSellerDescriptionLines(allTexts.slice(labelIdx + 1), {
+      title: record.title,
+      priceRaw: record.price_raw,
+      maxLines: 20
+    });
     if (sectionLines.length) {
       sectionDescription = normalizeDetailDescription(sectionLines.join(" | "));
     }
   }
 
-  const detailDescription =
-    normalizeDetailDescription(adPreviewText) ||
-    sectionDescription ||
-    (lines.length ? normalizeDetailDescription(lines.join(" | ")) : null);
+  const joinedLines = lines.length ? normalizeDetailDescription(lines.join(" | ")) : null;
+  const longest = pickLongestSellerText(allTexts, {
+    title: record.title,
+    priceRaw: record.price_raw
+  });
+
+  // Prefer the strongest seller text we can find (long single node often wins over short fragments).
+  let detailDescription = normalizeDetailDescription(adPreviewText) || sectionDescription || null;
+  for (const candidate of [joinedLines, longest]) {
+    if (shouldPreferDescription(candidate, detailDescription)) {
+      detailDescription = candidate;
+    }
+  }
+
   return {
     detailDescription,
     detailLocation,
@@ -233,7 +297,26 @@ export async function extractDetailFieldsFromPage(page, record) {
 
 export function deriveDescriptionFromDetail({ bodyText, metaOgDescription, title, priceRaw, detailDescription }) {
   const detail = cleanText(detailDescription);
-  if (detail) return detail;
+  if (detail && !isWeakDescription(detail)) return detail;
+
+  const bodyLines = String(bodyText || "")
+    .split("\n")
+    .map((line) => cleanText(line))
+    .filter(Boolean);
+  const fromBodyLines = collectSellerDescriptionLines(bodyLines, { title, priceRaw, maxLines: 20 });
+  const fromBodyJoined = fromBodyLines.length
+    ? normalizeDetailDescription(fromBodyLines.join(" | "))
+    : null;
+  const fromBodyLongest = pickLongestSellerText(bodyLines, { title, priceRaw });
+  let fromBody = null;
+  for (const candidate of [fromBodyJoined, fromBodyLongest]) {
+    if (shouldPreferDescription(candidate, fromBody)) fromBody = candidate;
+  }
+  if (fromBody && !isWeakDescription(fromBody)) return fromBody;
+
+  if (shouldPreferDescription(detail, fromBody)) return detail;
+  if (fromBody) return fromBody;
+
   const fallback = inferDescription(bodyText || metaOgDescription || "", title, priceRaw);
   return cleanText(fallback);
 }

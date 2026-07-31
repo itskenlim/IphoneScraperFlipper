@@ -2,7 +2,7 @@ export const LISTING_ID_RE = /\/marketplace\/item\/(\d+)/;
 export const PRICE_RE =
   /((?:\u20b1|PHP|\$)\s*\d[\d,]*(?:\.\d{1,2})?|\d[\d,]*(?:\.\d{1,2})?\s*(?:PHP))/i;
 export const TITLE_NOISE_RE =
-  /(?:\b\d+\s*(?:m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|wk|week|weeks|mo|month|months)\b|\bkm away\b|^sponsored$|^boosted$)/i;
+  /(?:\b\d+\s*(?:m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|wk|week|weeks|mo|month|months)\b|\bkm away\b|^sponsored$|^boosted$|^just listed$|^newly listed$)/i;
 export const LISTED_IN_RE = /listed .+ in (.+)$/i;
 export const LOCATION_LINE_RE = /.+,\s*PH-\d{2}$/i;
 

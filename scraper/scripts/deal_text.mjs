@@ -620,8 +620,9 @@ export function hasWaterDamageSignal(text) {
 }
 
 /**
- * For-parts / for-repair / AS-IS listings — not a usable phone deal.
+ * For-parts / for-repair listings — not a usable phone deal.
  * Combines explicit parts language + dead unit / water damage.
+ * Note: "as is" alone is NOT a risk — sellers use it for normal condition sales.
  */
 export function hasForPartsRisk(text) {
   const raw = String(text || "");
@@ -635,11 +636,9 @@ export function hasForPartsRisk(text) {
     /\bfor\s*parts?\b/i,
     /\bparts?\s*out\b/i,
     /\bpartsout\b/i,
-    /\bas[-\s]?is\b/i,
     /\bspare\s*parts?\b/i,
     /\bfor\s*technicians?\b/i,
     /\bideal\s+for\s+(?:repair|parts?|technicians?)\b/i,
-    /\bselling\s+as[-\s]?is\b/i,
     /\brepair\s+only\b/i,
     /\bparts?\s+only\b/i,
     // Hiligaynon / Taglish
@@ -655,8 +654,6 @@ export function hasForPartsRisk(text) {
     "partsout",
     "partsoutonly",
     "spareparts",
-    "asis",
-    "sellingasis",
     "pararepair",
     "paraparts"
   ];

@@ -378,9 +378,14 @@ export function inferDescription(cardText, title, priceRaw) {
     .filter((line) => !TITLE_NOISE_RE.test(line))
     .filter((line) => !LOCATION_LINE_RE.test(line))
     .filter((line) => !/listed .+ in .+/i.test(line))
+    .filter((line) => !/^(details?|condition|used\s*-\s*|new\s*-\s*)/i.test(line))
     .filter((line) => line.length >= 3);
   if (!lines.length) return null;
-  return cleanText(lines.slice(0, 3).join(" | "));
+  const joined = cleanText(lines.slice(0, 3).join(" | "));
+  // Feed cards almost never include the seller body. Short leftovers are usually the
+  // product name when FB shows "Just listed" as the title badge — leave empty for enrich.
+  if (!joined || joined.length < 48) return null;
+  return joined;
 }
 
 export function isLocationLikeDescription(value) {
@@ -390,10 +395,31 @@ export function isLocationLikeDescription(value) {
 }
 
 export function isWeakDescription(value) {
-  // "Weak" is now intentionally strict: only treat missing/empty as weak.
-  // Some sellers use very short descriptions, and location strings are not harmful.
   const cleaned = cleanText(value);
   if (cleaned == null) return true;
   if (/find friends\s*\|\s*marketplace(\s*\|\s*browse all)?/i.test(cleaned)) return true;
+  // Feed cards often store the short product title as "description" (esp. when FB title is "Just listed").
+  // Those are not seller descriptions and should be upgraded by enrichment/monitor.
+  if (/^just listed$/i.test(cleaned)) return true;
+  if (cleaned.length < 48) return true;
   return false;
+}
+
+/** Prefer next description when it is stronger than prev (empty/weak → real, or much longer). */
+export function shouldPreferDescription(next, prev) {
+  const n = cleanText(next);
+  const p = cleanText(prev);
+  if (!n) return false;
+  if (!p || isWeakDescription(p)) {
+    if (!isWeakDescription(n)) return true;
+    return n.length > (p?.length || 0);
+  }
+  if (isWeakDescription(n)) return false;
+  return n.length >= p.length + 40;
+}
+
+export function isPlaceholderTitle(value) {
+  const cleaned = cleanText(value);
+  if (!cleaned) return true;
+  return /^(just listed|newly listed)$/i.test(cleaned);
 }

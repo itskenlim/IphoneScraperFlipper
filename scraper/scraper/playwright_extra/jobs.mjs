@@ -15,7 +15,16 @@ import { looksLikeLoginOrBlock } from "./fb_checks.mjs";
 import { fetchWatchlistCandidates, recheckCandidatesChunk } from "./monitor.mjs";
 import { countMonitorTiers, readMonitorScheduleConfig } from "./monitor_schedule.mjs";
 import { shouldSkipAsNoise } from "./discovery_filter.mjs";
-import { cleanText, envBool, gotoWithRetry, randomBetween, sleep } from "./utils.mjs";
+import {
+  cleanText,
+  envBool,
+  gotoWithRetry,
+  isPlaceholderTitle,
+  isWeakDescription,
+  randomBetween,
+  shouldPreferDescription,
+  sleep
+} from "./utils.mjs";
 
 function hasGraphqlStatus(row) {
   return ["listing_is_live", "listing_is_sold", "listing_is_pending", "listing_is_hidden"].some(
@@ -29,9 +38,20 @@ function mergeEnrichedRow(baseRow, enrichedRow, counters) {
   let changed = false;
 
   const enrichDescription = cleanText(enrichedRow.description);
-  if (!cleanText(merged.description) && enrichDescription) {
+  if (shouldPreferDescription(enrichDescription, merged.description)) {
     merged.description = enrichDescription;
     counters.descFilled += 1;
+    changed = true;
+  }
+
+  const enrichTitle = cleanText(enrichedRow.title);
+  if (
+    enrichTitle &&
+    !isPlaceholderTitle(enrichTitle) &&
+    isPlaceholderTitle(merged.title)
+  ) {
+    merged.title = enrichTitle;
+    counters.titleFilled = (counters.titleFilled || 0) + 1;
     changed = true;
   }
 
@@ -288,8 +308,8 @@ export async function runDiscoveryJob({
     if (doEnrich) {
       log(
         `[INFO] discovery_enrich_merge merged=${mergeCounters.merged} desc_filled=${mergeCounters.descFilled} ` +
-          `condition_filled=${mergeCounters.conditionFilled} status_fallback=${mergeCounters.statusFallback} ` +
-          `posted_at_filled=${mergeCounters.postedAtFilled}`
+          `title_filled=${mergeCounters.titleFilled || 0} condition_filled=${mergeCounters.conditionFilled} ` +
+          `status_fallback=${mergeCounters.statusFallback} posted_at_filled=${mergeCounters.postedAtFilled}`
       );
     }
 

@@ -26,14 +26,17 @@ import {
   envBool,
   gotoWithRetry,
   gotoWithRetryWithReferer,
-  inferDescription,
   inferHeaderLocationRaw,
   inferHeaderPriceRaw,
   inferPostedAtFromBodyText,
+  inferTitle,
+  isPlaceholderTitle,
+  isWeakDescription,
   looksLikeBuyerWantedPost,
   parsePhpPrice,
   randomBetween,
   sanitizeTitle,
+  shouldPreferDescription,
   sleep
 } from "./utils.mjs";
 
@@ -64,7 +67,8 @@ function hoursSince(value) {
 }
 
 function shouldRefreshDescription(candidate, refreshHours) {
-  if (!cleanText(candidate?.description)) return true;
+  // Short feed titles stored as description must be refreshed even if non-empty.
+  if (isWeakDescription(candidate?.description)) return true;
   if (!Number.isFinite(refreshHours) || refreshHours <= 0) return true;
   const anchor = candidate?.monitor_last_checked_at ?? candidate?.last_seen_at;
   const hrs = hoursSince(anchor);
@@ -323,6 +327,10 @@ async function recheckOne(page, candidate, opts, index, total) {
         : sanitizeTitle(cleanOgTitle(meta.ogTitle)) ||
           sanitizeTitle(cleanText(candidate.title)) ||
           cleanText(candidate.title);
+    if (isPlaceholderTitle(derivedTitle) && useDomText) {
+      derivedTitle =
+        sanitizeTitle(inferTitle(bodyText || meta.ogDescription || "", derivedTitle)) || derivedTitle;
+    }
 
     let derivedPriceRaw =
       graphqlOnly || !useDomFull
@@ -352,6 +360,10 @@ async function recheckOne(page, candidate, opts, index, total) {
           });
     if (useDomText && !cleanText(bodyText) && Array.isArray(details.allTexts) && details.allTexts.length) {
       bodyText = details.allTexts.join("\n");
+    }
+    if (isPlaceholderTitle(derivedTitle) && useDomText) {
+      const titleSource = cleanText(bodyText) || (details.allTexts || []).join("\n");
+      derivedTitle = sanitizeTitle(inferTitle(titleSource, derivedTitle)) || derivedTitle;
     }
     const statusText = useDomStatus
       ? cleanText(bodyText) || cleanText(meta.ogDescription) || ""
@@ -492,10 +504,14 @@ async function recheckOne(page, candidate, opts, index, total) {
         }) || cleanText(candidate.description)
       : cleanText(candidate.description);
 
-    // Guard: when Facebook redirects to a generic Marketplace shell, we sometimes pick up header chrome text.
+    // Prefer stronger seller text; never let a weak DOM/fallback wipe a better existing description.
     let safeDescription = derivedDescription;
     if (safeDescription && /find friends\s*\|\s*marketplace(\s*\|\s*browse all)?/i.test(safeDescription)) {
       safeDescription = cleanText(candidate.description);
+    } else if (useDomForDesc) {
+      if (!shouldPreferDescription(safeDescription, candidate.description)) {
+        safeDescription = cleanText(candidate.description) || safeDescription;
+      }
     }
 
     const descSource = !useDomForDesc

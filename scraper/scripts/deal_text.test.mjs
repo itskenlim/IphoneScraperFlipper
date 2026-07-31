@@ -333,11 +333,12 @@ test("Hiligaynon / typo open variants are detected", () => {
   assert.equal(hasDeadUnitSignal("indi na gagana"), true);
 });
 
-test("parts out / for repair / AS-IS are for_parts", () => {
+test("parts out / for repair are for_parts but AS-IS alone is not", () => {
   assert.equal(hasForPartsRisk("parts out only"), true);
   assert.equal(hasForPartsRisk("partsout"), true);
   assert.equal(hasForPartsRisk("Issue / For Repair"), true);
   assert.equal(hasForPartsRisk("Selling AS IS – ideal for repair, parts, or technicians"), true);
+  assert.equal(hasForPartsRisk("Selling as is, Face ID working openline"), false);
   assert.equal(hasForPartsRisk("iPhone 13 128gb openline all working"), false);
 });
 

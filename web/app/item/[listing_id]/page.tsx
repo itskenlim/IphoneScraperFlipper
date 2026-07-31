@@ -40,7 +40,7 @@ function buildWarnings(listing: any): string[] {
 
   if (flags.icloud_lock) warnings.push("iCloud / reset risk");
   if (flags.wanted_post) warnings.push("Wanted / buying post");
-  if (flags.for_parts) warnings.push("For parts / repair / AS-IS");
+  if (flags.for_parts) warnings.push("For parts / repair");
   if (flags.dead_unit) warnings.push("Doesn't turn on / dead unit");
   if (flags.water_damage) warnings.push("Water damage");
   if (flags.price_too_low) warnings.push("Tikalon price check");
@@ -96,7 +96,7 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
     ? "Good deal"
     : hardBlocked
       ? flags.for_parts || flags.dead_unit || flags.water_damage
-        ? "For parts / not usable as-is"
+        ? "For parts / not a usable phone"
         : "High risk — not recommended"
       : profit != null && profit <= 0
         ? "Priced at or above typical"
