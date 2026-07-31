@@ -67,11 +67,23 @@ function hoursSince(value) {
 }
 
 function shouldRefreshDescription(candidate, refreshHours) {
-  // Short feed titles stored as description must be refreshed even if non-empty.
-  if (isWeakDescription(candidate?.description)) return true;
-  if (!Number.isFinite(refreshHours) || refreshHours <= 0) return true;
+  // NOTE: This only controls whether an *already-selected* listing pays for DOM
+  // description extraction. It does NOT change who gets into the monitor limit
+  // (that is still monitor_next_check_at / tier scheduling).
   const anchor = candidate?.monitor_last_checked_at ?? candidate?.last_seen_at;
   const hrs = hoursSince(anchor);
+
+  // Weak/empty descriptions: retry on a cadence so naturally bare listings do not
+  // force expensive DOM work on every visit. Default matches DESC_REFRESH_HOURS;
+  // set PLAYWRIGHT_MONITOR_WEAK_DESC_REFRESH_HOURS lower (e.g. 6) for faster backfill.
+  if (isWeakDescription(candidate?.description)) {
+    const weakHours = envInt("PLAYWRIGHT_MONITOR_WEAK_DESC_REFRESH_HOURS", refreshHours);
+    if (!Number.isFinite(weakHours) || weakHours <= 0) return true;
+    if (!Number.isFinite(hrs)) return true;
+    return hrs >= weakHours;
+  }
+
+  if (!Number.isFinite(refreshHours) || refreshHours <= 0) return true;
   if (!Number.isFinite(hrs)) return true;
   return hrs >= refreshHours;
 }
