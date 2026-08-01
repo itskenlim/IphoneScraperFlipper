@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import {
   collectSellerDescriptionLines,
   deriveDescriptionFromDetail,
-  pickLongestSellerText
+  looksLikeForeignListingDescription,
+  pickLongestSellerText,
+  roughProductKey
 } from "../scraper/playwright_extra/extract_detail.mjs";
 import {
   inferDescription,
@@ -112,4 +114,65 @@ test("pickLongestSellerText prefers long write-up over short title", () => {
     { title: "Just listed", priceRaw: "PHP20,000" }
   );
   assert.equal(best, long);
+});
+
+test("looksLikeForeignListingDescription catches similar-item iPhone 15 paste on iPhone 11", () => {
+  const foreign =
+    "Just listed PHP36,990 Iphone 15 Pro Max 256GB Openline Natural Titanium 86% Battery Health 338 Cycle count only ILOILO COMPUTER SELLER AND BUYER";
+  assert.equal(
+    looksLikeForeignListingDescription(foreign, { title: "Ip 11 Pro", priceRaw: "PHP13,000" }),
+    true
+  );
+  assert.equal(roughProductKey("Ip 11 Pro"), "iphone_11_pro");
+  assert.equal(roughProductKey(foreign)?.startsWith("iphone_15"), true);
+});
+
+test("deriveDescriptionFromDetail does not steal Similar items text when seller desc is short", () => {
+  const body = [
+    "Ip 11 Pro",
+    "PHP13,000",
+    "Listed a day ago in Iloilo City, PH-06",
+    "Details",
+    "Condition",
+    "Used - Good",
+    "Rush!! ara sa pic details",
+    "Similar items",
+    "Just listed PHP36,990 Iphone 15 Pro Max 256GB Openline Natural Titanium 86% Battery Health 338 Cycle count only ILOILO COMPUTER SELLER AND BUYER",
+    "PHP36,990",
+    "Iphone 15 Pro Max 256GB"
+  ].join("\n");
+
+  const desc = deriveDescriptionFromDetail({
+    bodyText: body,
+    metaOgDescription: null,
+    title: "Ip 11 Pro",
+    priceRaw: "PHP13,000",
+    detailDescription: "Rush!! ara sa pic details"
+  });
+  assert.equal(desc, "Rush!! ara sa pic details");
+  assert.ok(!/15 Pro Max/i.test(desc || ""));
+});
+
+test("deriveDescriptionFromDetail does not replace short real desc with iPad similar item", () => {
+  const body = [
+    "For sale iphone13",
+    "PHP18,000",
+    "Listed 39 minutes ago in Jordan, PH-06",
+    "Details",
+    "Condition",
+    "New",
+    "No issue",
+    "Similar items",
+    "iPad Mini 5 256gb with cellular updated software ios 26 Mini and cutie"
+  ].join("\n");
+
+  const desc = deriveDescriptionFromDetail({
+    bodyText: body,
+    metaOgDescription: null,
+    title: "For sale iphone13",
+    priceRaw: "PHP18,000",
+    detailDescription: "No issue"
+  });
+  assert.equal(desc, "No issue");
+  assert.ok(!/iPad/i.test(desc || ""));
 });

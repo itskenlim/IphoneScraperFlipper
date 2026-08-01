@@ -7,7 +7,7 @@ export const LISTED_IN_RE = /listed .+ in (.+)$/i;
 export const LOCATION_LINE_RE = /.+,\s*PH-\d{2}$/i;
 
 export const DETAIL_STOP_RE =
-  /(location is approximate|seller information|seller details|today's picks|similar items|message seller|send seller a message)/i;
+  /(location is approximate|seller information|seller details|today'?s picks|similar items|more from this seller|people also viewed|sponsored|message seller|send seller a message)/i;
 export const DETAIL_NOISE_RE = /^(details|detail|save|share|message|send|listed .+ in .+|location)$/i;
 
 export const MARKETPLACE_SELECTOR = "a[href*='/marketplace/item/']";

@@ -15,6 +15,7 @@ import {
   deriveLocationFromDetail,
   derivePriceRawFromDetail,
   extractDetailFieldsFromPage,
+  isAcceptableListingDescription,
   looksLikeSoldListing,
   looksLikeUnavailableListing
 } from "./extract_detail.mjs";
@@ -517,12 +518,21 @@ async function recheckOne(page, candidate, opts, index, total) {
       : cleanText(candidate.description);
 
     // Prefer stronger seller text; never let a weak DOM/fallback wipe a better existing description.
+    // Also reject Similar-items / foreign-card bleed (wrong model or price pasted as description).
     let safeDescription = derivedDescription;
+    const descCtx = { title: derivedTitle, priceRaw: derivedPriceRaw };
     if (safeDescription && /find friends\s*\|\s*marketplace(\s*\|\s*browse all)?/i.test(safeDescription)) {
       safeDescription = cleanText(candidate.description);
+    } else if (safeDescription && !isAcceptableListingDescription(safeDescription, descCtx)) {
+      const kept = cleanText(candidate.description);
+      safeDescription =
+        kept && isAcceptableListingDescription(kept, descCtx) ? kept : null;
     } else if (useDomForDesc) {
       if (!shouldPreferDescription(safeDescription, candidate.description)) {
-        safeDescription = cleanText(candidate.description) || safeDescription;
+        const kept = cleanText(candidate.description);
+        if (!kept || isAcceptableListingDescription(kept, descCtx)) {
+          safeDescription = kept || safeDescription;
+        }
       }
     }
 

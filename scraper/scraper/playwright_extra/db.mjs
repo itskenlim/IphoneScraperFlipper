@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { createClient } from "@supabase/supabase-js";
 
+import { isAcceptableListingDescription, looksLikeForeignListingDescription } from "./extract_detail.mjs";
 import { cleanText, envBool, envInt, isPlaceholderTitle, isWeakDescription, normalizeLocationRaw, parsePhpPrice, shouldPreferDescription } from "./utils.mjs";
 import {
   computeFailureLockout,
@@ -262,11 +263,29 @@ export async function persistToDatabase(rows, { log, phase } = {}) {
         nextListingLocationState = existingLocationState;
       }
 
-      if (isWeakDescription(nextDescription) && !isWeakDescription(existing.description)) {
+      const descCtx = { title: nextTitle || existing.title, priceRaw: nextPriceRaw || existing.price_raw };
+      const nextOk = !cleanText(nextDescription) || isAcceptableListingDescription(nextDescription, descCtx);
+      const existingOk =
+        !cleanText(existing.description) ||
+        isAcceptableListingDescription(existing.description, {
+          title: existing.title,
+          priceRaw: existing.price_raw
+        });
+      const existingForeign = looksLikeForeignListingDescription(existing.description, {
+        title: existing.title,
+        priceRaw: existing.price_raw
+      });
+      const nextForeign = looksLikeForeignListingDescription(nextDescription, descCtx);
+
+      if (nextForeign && existingOk && cleanText(existing.description)) {
         nextDescription = existing.description;
-      } else if (shouldPreferDescription(nextDescription, existing.description)) {
+      } else if (existingForeign && nextOk && cleanText(nextDescription)) {
+        // keep nextDescription (cleans contamination)
+      } else if (isWeakDescription(nextDescription) && !isWeakDescription(existing.description) && existingOk) {
+        nextDescription = existing.description;
+      } else if (shouldPreferDescription(nextDescription, existing.description) && nextOk) {
         // keep nextDescription (stronger)
-      } else if (cleanText(existing.description) && isWeakDescription(nextDescription)) {
+      } else if (cleanText(existing.description) && isWeakDescription(nextDescription) && existingOk) {
         nextDescription = existing.description;
       }
 

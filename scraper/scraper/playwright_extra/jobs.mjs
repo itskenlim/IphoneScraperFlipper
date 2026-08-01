@@ -16,11 +16,14 @@ import { fetchWatchlistCandidates, recheckCandidatesChunk } from "./monitor.mjs"
 import { countMonitorTiers, readMonitorScheduleConfig } from "./monitor_schedule.mjs";
 import { shouldSkipAsNoise } from "./discovery_filter.mjs";
 import {
+  isAcceptableListingDescription,
+  looksLikeForeignListingDescription
+} from "./extract_detail.mjs";
+import {
   cleanText,
   envBool,
   gotoWithRetry,
   isPlaceholderTitle,
-  isWeakDescription,
   randomBetween,
   shouldPreferDescription,
   sleep
@@ -37,14 +40,34 @@ function mergeEnrichedRow(baseRow, enrichedRow, counters) {
   const merged = { ...baseRow };
   let changed = false;
 
+  const enrichTitle = cleanText(enrichedRow.title);
   const enrichDescription = cleanText(enrichedRow.description);
-  if (shouldPreferDescription(enrichDescription, merged.description)) {
+  const descCtx = {
+    title: enrichTitle || merged.title,
+    priceRaw: merged.price_raw || enrichedRow.price_raw
+  };
+  if (
+    enrichDescription &&
+    isAcceptableListingDescription(enrichDescription, descCtx) &&
+    shouldPreferDescription(enrichDescription, merged.description)
+  ) {
+    merged.description = enrichDescription;
+    counters.descFilled += 1;
+    changed = true;
+  } else if (
+    enrichDescription &&
+    isAcceptableListingDescription(enrichDescription, descCtx) &&
+    looksLikeForeignListingDescription(merged.description, {
+      title: merged.title,
+      priceRaw: merged.price_raw
+    })
+  ) {
+    // Replace already-contaminated description with an acceptable enrich result.
     merged.description = enrichDescription;
     counters.descFilled += 1;
     changed = true;
   }
 
-  const enrichTitle = cleanText(enrichedRow.title);
   if (
     enrichTitle &&
     !isPlaceholderTitle(enrichTitle) &&
