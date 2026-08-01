@@ -5,8 +5,7 @@ import {
   collectSellerDescriptionLines,
   deriveDescriptionFromDetail,
   looksLikeForeignListingDescription,
-  pickLongestSellerText,
-  roughProductKey
+  pickLongestSellerText
 } from "../scraper/playwright_extra/extract_detail.mjs";
 import {
   inferDescription,
@@ -123,8 +122,25 @@ test("looksLikeForeignListingDescription catches similar-item iPhone 15 paste on
     looksLikeForeignListingDescription(foreign, { title: "Ip 11 Pro", priceRaw: "PHP13,000" }),
     true
   );
-  assert.equal(roughProductKey("Ip 11 Pro"), "iphone_11_pro");
-  assert.equal(roughProductKey(foreign)?.startsWith("iphone_15"), true);
+  assert.equal(
+    looksLikeForeignListingDescription(foreign.replace(/\s+/g, ""), { title: "Ip 11 Pro", priceRaw: "PHP13,000" }),
+    true
+  );
+});
+
+test("looksLikeForeignListingDescription allows real swap/sale copy mentioning other models", () => {
+  const swap =
+    "Sale iphone 11 128gb or swap sa higher unit iphone 15 pro max willing to add cash 5k";
+  assert.equal(
+    looksLikeForeignListingDescription(swap, { title: "Ip 11 Pro", priceRaw: "PHP13,000" }),
+    false
+  );
+  const compare =
+    "Presyong pang iphone 11 nalang Iphone 12 128gb Openline Face ID working";
+  assert.equal(
+    looksLikeForeignListingDescription(compare, { title: "Iphone 12 128gb", priceRaw: "PHP9,500" }),
+    false
+  );
 });
 
 test("deriveDescriptionFromDetail does not steal Similar items text when seller desc is short", () => {

@@ -7,7 +7,6 @@ import {
   inferLocation,
   isPriceOnly,
   isWeakDescription,
-  parsePhpPrice,
   shouldPreferDescription
 } from "./utils.mjs";
 
@@ -113,7 +112,7 @@ function isDetailChromeLine(line, titleClean, priceClean) {
   return false;
 }
 
-/** Rough product key for cross-listing contamination checks (iphone_11_pro vs iphone_15_promax). */
+/** Rough product key helper (used in tests / debugging). Not used to reject swap copy. */
 export function roughProductKey(text) {
   const t = String(text || "")
     .toLowerCase()
@@ -122,7 +121,6 @@ export function roughProductKey(text) {
     const m = /\bipad\s*(mini|air|pro)?\s*(\d{1,2})?/i.exec(t);
     return `ipad_${(m?.[1] || "generic").toLowerCase()}_${m?.[2] || ""}`.replace(/_+$/, "");
   }
-  // "Ip 11 Pro", "iPhone 15 Pro Max", "iphone13"
   const m =
     /\b(?:iphone|ip)\s*(\d{1,2})\s*(pro\s*max|promax|pro|plus|air|e)?/i.exec(t) ||
     /\biphone\s*(\d{1,2})\b/i.exec(t);
@@ -133,52 +131,35 @@ export function roughProductKey(text) {
   return `iphone_${m[1]}_${variant}`.replace(/_+$/, "");
 }
 
-function extractMentionedPrices(text) {
-  const raw = String(text || "");
-  const out = [];
-  const re = /(?:\u20b1|php)\s*([\d,]+(?:\.\d{1,2})?)/gi;
-  let match = re.exec(raw);
-  while (match) {
-    const n = parsePhpPrice(match[0]);
-    if (n != null) out.push(n);
-    match = re.exec(raw);
-  }
-  return out;
-}
-
 /**
- * True when candidate text looks like another Marketplace card / similar-item bleed
- * (wrong price, feed "Just listed PHP…", or different model than the listing title).
+ * True when candidate text looks like Marketplace feed-card / similar-item bleed.
+ *
+ * Intentionally narrow: swap/sale copy often mentions other models ("swap sa IP15, add cash")
+ * and other prices (mall SRP, previous ask). Those must NOT be rejected.
+ *
+ * The main contamination defense is scoping extraction to Details→before Similar items;
+ * this only catches the distinctive stolen-card paste we saw in the wild.
  */
 export function looksLikeForeignListingDescription(value, { title = null, priceRaw = null } = {}) {
   const desc = cleanText(value);
   if (!desc) return false;
 
-  // Feed-card paste: "Just listed PHP36,990 Iphone 15 Pro Max…"
-  if (/^just listed\s*(?:\u20b1|php)?\s*\d/i.test(desc)) return true;
-  if (/just listed\s*(?:\u20b1|php)\s*[\d,]+/i.test(desc) && desc.length > 60) return true;
-
-  const listingPrice = parsePhpPrice(priceRaw);
-  if (listingPrice != null) {
-    const mentioned = extractMentionedPrices(desc);
-    for (const p of mentioned) {
-      // Another card's sticker price glued into this description.
-      if (Math.abs(p - listingPrice) / listingPrice >= 0.35 && Math.abs(p - listingPrice) >= 3000) {
-        return true;
-      }
-    }
+  // Legitimate sellers often discuss other units — never treat those as foreign.
+  if (/\b(swap|trade|willing\s+to\s+add|mag\s*add|palit|cash\s*out)\b/i.test(desc)) {
+    return false;
   }
+  if (/\bc\s*\/\s*o\b/i.test(desc)) return false;
 
-  const titleKey = roughProductKey(title);
-  const descKey = roughProductKey(desc);
-  if (titleKey && descKey) {
-    const titleFamily = titleKey.split("_").slice(0, 2).join("_"); // iphone_11
-    const descFamily = descKey.split("_").slice(0, 2).join("_");
-    if (titleFamily.startsWith("iphone_") && descFamily.startsWith("ipad")) return true;
-    if (titleFamily.startsWith("ipad") && descFamily.startsWith("iphone_")) return true;
-    if (titleFamily !== descFamily) return true;
-  }
+  // Stolen feed card paste: "Just listed PHP36,990 Iphone 15 Pro Max…"
+  // (real seller bodies almost never start or embed that chrome + sticker price.)
+  if (/^just listed\s*(?:\u20b1|php)?\s*[\d,]/i.test(desc)) return true;
+  if (/\bjust listed\s*(?:\u20b1|php)\s*[\d,]{4,}/i.test(desc)) return true;
 
+  // Compact feed paste without spaces: "Just listedPHP36,990Iphone 15…"
+  if (/justlisted(?:\u20b1|php)[\d,]{4,}/i.test(desc.replace(/\s+/g, ""))) return true;
+
+  void title;
+  void priceRaw;
   return false;
 }
 
