@@ -72,6 +72,56 @@ export type PublicListingsQuery = {
   pageSize?: number;
 };
 
+function mapPublicListingRow(r: any): PublicListing {
+  const deal = Array.isArray(r?.deal) ? r.deal[0] : r?.deal;
+  const feat = Array.isArray(r?.feat) ? r.feat[0] : r?.feat;
+  return {
+    listing_id: String(r.listing_id),
+    public_title: publicTitleFromFeatures(feat, r.title),
+    price_php: r.price_php ?? null,
+    price_raw: r.price_raw ?? null,
+    location_raw: r.location_raw ?? null,
+    status: r.status ?? "active",
+    posted_at: r.posted_at ?? null,
+    first_seen_at: r.first_seen_at ?? null,
+    last_seen_at: r.last_seen_at ?? null,
+    last_price_change_at: r.last_price_change_at ?? null,
+    battery_health: feat?.battery_health ?? null,
+    openline: feat?.openline ?? null,
+    deal_score: deal?.deal_score ?? null,
+    below_market_pct: deal?.below_market_pct ?? null,
+    confidence: deal?.confidence ?? null,
+    est_profit_php: deal?.est_profit_php ?? null,
+    risk_flags: feat?.risk_flags ?? null
+  };
+}
+
+function dealScoreRank(score: unknown) {
+  const s = String(score || "").toUpperCase();
+  if (s === "A") return 0;
+  if (s === "B") return 1;
+  if (s === "C") return 2;
+  return 9;
+}
+
+function listingTimeValue(value: unknown) {
+  const parsed = value ? new Date(String(value)).getTime() : NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Best deals: highest Save ₱ first, then better letter score, then newest. */
+export function compareBestDeals(a: PublicListing, b: PublicListing) {
+  const profitA = typeof a.est_profit_php === "number" ? a.est_profit_php : Number.NEGATIVE_INFINITY;
+  const profitB = typeof b.est_profit_php === "number" ? b.est_profit_php : Number.NEGATIVE_INFINITY;
+  if (profitA !== profitB) return profitB - profitA;
+  const rankDiff = dealScoreRank(a.deal_score) - dealScoreRank(b.deal_score);
+  if (rankDiff !== 0) return rankDiff;
+  const timeA = listingTimeValue(a.posted_at || a.first_seen_at);
+  const timeB = listingTimeValue(b.posted_at || b.first_seen_at);
+  if (timeA !== timeB) return timeB - timeA;
+  return String(b.listing_id).localeCompare(String(a.listing_id));
+}
+
 export async function fetchPublicListings(input: PublicListingsQuery) {
   const page = Math.max(1, input.page || 1);
   const pageSize = Math.max(10, Math.min(100, input.pageSize || 50));
@@ -89,24 +139,49 @@ export async function fetchPublicListings(input: PublicListingsQuery) {
   const selectDeals =
     "listing_id,title,price_php,price_raw,location_raw,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,deal:deal_metrics!inner(deal_score,below_market_pct,confidence,est_profit_php),feat:listing_features(model_family,variant,storage_gb,battery_health,openline,risk_flags)";
 
-  let query = supabase
-    .from("listings")
-    .select(sort === "deals" ? selectDeals : selectBase, { count: "estimated" });
-
+  // Best deals: PostgREST nested order + range() is unreliable across pages, so fetch the
+  // scored pool, sort by Save ₱ in memory, then slice. Dataset is small (~hundreds).
   if (sort === "deals") {
-    query = query
-      .in("deal_metrics.deal_score", ["A", "B", "C"])
-      .order("est_profit_php", { ascending: false, nullsFirst: false, referencedTable: "deal_metrics" })
-      .order("deal_score", { ascending: true, nullsFirst: false, referencedTable: "deal_metrics" })
-      .order("posted_at", { ascending: false, nullsFirst: false })
-      .order("first_seen_at", { ascending: false, nullsFirst: false })
-      .order("listing_id", { ascending: false, nullsFirst: false });
-  } else {
-    query = query
-      .order("posted_at", { ascending: false, nullsFirst: false })
-      .order("first_seen_at", { ascending: false, nullsFirst: false })
-      .order("listing_id", { ascending: false, nullsFirst: false });
+    const dealsCap = 3000;
+    let dealsQuery = supabase
+      .from("listings")
+      .select(selectDeals, { count: "exact" })
+      .in("deal_metrics.deal_score", ["A", "B", "C"]);
+
+    if (q) {
+      dealsQuery = dealsQuery.ilike("title", `%${q}%`);
+    }
+    // Default Best deals to buyable/active only. Use status=all to include sold/unavailable.
+    if (status && status !== "all") {
+      dealsQuery = dealsQuery.eq("status", status);
+    } else if (status !== "all") {
+      dealsQuery = dealsQuery.eq("status", "active");
+    }
+
+    const res = await dealsQuery.range(0, dealsCap - 1);
+    if (res.error) throw new Error(res.error.message);
+
+    const mapped = ((res.data || []) as unknown as any[]).map(mapPublicListingRow);
+    const sorted = [...mapped].sort(compareBestDeals);
+    const total = sorted.length;
+    const items = sorted.slice(from, from + pageSize);
+    const hasMore = total > page * pageSize;
+
+    return {
+      page,
+      pageSize,
+      total,
+      hasMore,
+      items
+    };
   }
+
+  let query = supabase.from("listings").select(selectBase, { count: "estimated" });
+
+  query = query
+    .order("posted_at", { ascending: false, nullsFirst: false })
+    .order("first_seen_at", { ascending: false, nullsFirst: false })
+    .order("listing_id", { ascending: false, nullsFirst: false });
 
   if (q) {
     query = query.ilike("title", `%${q}%`);
@@ -119,58 +194,9 @@ export async function fetchPublicListings(input: PublicListingsQuery) {
   if (res.error) throw new Error(res.error.message);
   const rows = (res.data || []) as unknown as any[];
   const total = typeof res.count === "number" ? res.count : null;
-  const hasMore =
-    sort === "deals" && typeof total === "number"
-      ? total > page * pageSize
-      : rows.length > pageSize;
-  let items: PublicListing[] = rows.slice(0, pageSize).map((r) => {
-    const deal = Array.isArray(r?.deal) ? r.deal[0] : r?.deal;
-    const feat = Array.isArray(r?.feat) ? r.feat[0] : r?.feat;
-    return {
-      listing_id: String(r.listing_id),
-      public_title: publicTitleFromFeatures(feat, r.title),
-      price_php: r.price_php ?? null,
-      price_raw: r.price_raw ?? null,
-      location_raw: r.location_raw ?? null,
-      status: r.status ?? "active",
-      posted_at: r.posted_at ?? null,
-      first_seen_at: r.first_seen_at ?? null,
-      last_seen_at: r.last_seen_at ?? null,
-      last_price_change_at: r.last_price_change_at ?? null,
-      battery_health: feat?.battery_health ?? null,
-      openline: feat?.openline ?? null,
-      deal_score: deal?.deal_score ?? null,
-      below_market_pct: deal?.below_market_pct ?? null,
-      confidence: deal?.confidence ?? null,
-      est_profit_php: deal?.est_profit_php ?? null,
-      risk_flags: feat?.risk_flags ?? null
-    };
-  });
+  const hasMore = rows.length > pageSize;
+  const items: PublicListing[] = rows.slice(0, pageSize).map(mapPublicListingRow);
 
-  if (sort === "deals") {
-    const scoreRank = (score: unknown) => {
-      const s = String(score || "").toUpperCase();
-      if (s === "A") return 0;
-      if (s === "B") return 1;
-      if (s === "C") return 2;
-      return 9;
-    };
-    const timeValue = (value: unknown) => {
-      const parsed = value ? new Date(String(value)).getTime() : NaN;
-      return Number.isFinite(parsed) ? parsed : 0;
-    };
-    items = [...items].sort((a, b) => {
-      const profitA = typeof a.est_profit_php === "number" ? a.est_profit_php : -Infinity;
-      const profitB = typeof b.est_profit_php === "number" ? b.est_profit_php : -Infinity;
-      if (profitA !== profitB) return profitB - profitA;
-      const rankDiff = scoreRank(a.deal_score) - scoreRank(b.deal_score);
-      if (rankDiff !== 0) return rankDiff;
-      const timeA = timeValue(a.posted_at || a.first_seen_at);
-      const timeB = timeValue(b.posted_at || b.first_seen_at);
-      if (timeA !== timeB) return timeB - timeA;
-      return String(b.listing_id).localeCompare(String(a.listing_id));
-    });
-  }
   return {
     page,
     pageSize,

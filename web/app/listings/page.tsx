@@ -202,13 +202,24 @@ export default async function Home({
               <select
                 id="status"
                 name="status"
-                defaultValue={params.status}
+                defaultValue={sortMode === "deals" && !params.status ? "" : params.status}
                 className="h-11 w-full rounded-md border border-border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10"
               >
-                <option value="">Any</option>
-                <option value="active">active</option>
-                <option value="sold">sold</option>
-                <option value="unavailable">unavailable</option>
+                {sortMode === "deals" ? (
+                  <>
+                    <option value="">Active only</option>
+                    <option value="all">Any status</option>
+                    <option value="sold">sold</option>
+                    <option value="unavailable">unavailable</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="">Any</option>
+                    <option value="active">active</option>
+                    <option value="sold">sold</option>
+                    <option value="unavailable">unavailable</option>
+                  </>
+                )}
               </select>
             </div>
             <div>
