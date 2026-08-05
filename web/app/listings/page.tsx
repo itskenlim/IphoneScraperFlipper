@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
 
+import { AutoSubmitSelect } from "@/components/auto-submit-select";
+import { DealQualityBadge } from "@/components/deal-quality-badge";
 import { BatteryHealthPill, PublicListingChecklist } from "@/components/listing-signal-pills";
 import { ListingRowChevron, ListingRowLink } from "@/components/listing-row-link";
 import { ListingsPageLink, ListingsSortToggle } from "@/components/listings-sort-toggle";
@@ -11,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchPublicListings } from "@/lib/data";
+import { dealQualityLabel, isLowConfidence, underSimilarListingsCopy } from "@/lib/dealLabels";
 import { formatDateTime, formatPct, formatPhp, formatRelativeAge } from "@/lib/format";
 import { parseRiskFlags } from "@/lib/riskFlags";
 import type { PublicListing } from "@/lib/types";
@@ -39,39 +42,6 @@ function statusBadge(status: string) {
   return <Badge variant="secondary">active</Badge>;
 }
 
-function scoreTone(score: unknown) {
-  const s = String(score || "").toUpperCase();
-  if (s === "A") return { bg: "bg-emerald-600", text: "text-emerald-300" };
-  if (s === "B") return { bg: "bg-amber-500", text: "text-amber-300" };
-  if (s === "C") return { bg: "bg-rose-600", text: "text-rose-300" };
-  return { bg: "bg-muted", text: "text-muted-foreground" };
-}
-
-function dealScoreBadge(score: unknown) {
-  const s = String(score || "").toUpperCase();
-  if (s !== "A" && s !== "B" && s !== "C") return null;
-  const tone = scoreTone(s);
-  return (
-    <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold text-white ${tone.bg}`}>
-      {s}
-    </span>
-  );
-}
-
-function confidenceLabel(value: unknown) {
-  const v = String(value || "").toLowerCase();
-  if (v === "high" || v === "med" || v === "low") return v;
-  return "—";
-}
-
-function confidenceTone(value: unknown) {
-  const v = String(value || "").toLowerCase();
-  if (v === "high") return "text-emerald-300";
-  if (v === "med") return "text-amber-300";
-  if (v === "low") return "text-rose-300";
-  return "text-muted-foreground";
-}
-
 function buildRedFlags(value: unknown): string[] {
   const flags = parseRiskFlags(value);
   const warnings: string[] = [];
@@ -97,6 +67,36 @@ function buildRedFlags(value: unknown): string[] {
   if (flags.no_description) warnings.push("Unknown condition");
 
   return warnings;
+}
+
+function ListingDealSignals({
+  dealScore,
+  belowMarketPct,
+  confidence,
+  profit
+}: {
+  dealScore: unknown;
+  belowMarketPct?: number | null;
+  confidence?: unknown;
+  profit?: number | null;
+}) {
+  if (!dealQualityLabel(dealScore)) return null;
+  const under = underSimilarListingsCopy(belowMarketPct, formatPct);
+  const fewComps = isLowConfidence(confidence);
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <DealQualityBadge score={dealScore} />
+        {under ? <span>{under}</span> : null}
+        {profit != null && profit > 0 ? (
+          <span className="font-medium text-foreground">
+            Save <span className="font-mono">{formatPhp(profit)}</span>
+          </span>
+        ) : null}
+      </div>
+      {fewComps ? <div className="text-[11px] text-muted-foreground">based on few comps</div> : null}
+    </div>
+  );
 }
 
 function showDeal(row: PublicListing) {
@@ -199,7 +199,7 @@ export default async function Home({
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground sm:text-xs" htmlFor="status">
                 Status
               </label>
-              <select
+              <AutoSubmitSelect
                 id="status"
                 name="status"
                 defaultValue={sortMode === "deals" && !params.status ? "" : params.status}
@@ -220,13 +220,13 @@ export default async function Home({
                     <option value="unavailable">unavailable</option>
                   </>
                 )}
-              </select>
+              </AutoSubmitSelect>
             </div>
             <div>
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground sm:text-xs" htmlFor="nearby">
                 Area
               </label>
-            <select
+            <AutoSubmitSelect
               id="nearby"
               name="nearby"
               defaultValue={params.nearby}
@@ -235,7 +235,7 @@ export default async function Home({
             >
               <option value="1">Includes nearby</option>
               <option value="0">Iloilo only</option>
-            </select>
+            </AutoSubmitSelect>
           </div>
           </div>
           <div>
@@ -282,12 +282,14 @@ export default async function Home({
                 {filteredItems.map((row: PublicListing) => (
                   (() => {
                     const dealVisible = showDeal(row);
-                    const score = dealVisible ? dealScoreBadge(row.deal_score) : null;
-                    const below = dealVisible ? row.below_market_pct : null;
-                    const conf = dealVisible ? row.confidence : null;
-                    const profit = dealVisible ? row.est_profit_php : null;
-                    const confidenceText = confidenceLabel(conf);
-                    const confidenceClass = confidenceTone(conf);
+                    const dealSignals = dealVisible ? (
+                      <ListingDealSignals
+                        dealScore={row.deal_score}
+                        belowMarketPct={row.below_market_pct}
+                        confidence={row.confidence}
+                        profit={row.est_profit_php}
+                      />
+                    ) : null;
                     const redFlags = buildRedFlags(row.risk_flags);
                     const shownRedFlags = redFlags.slice(0, 6);
                     const extraRedFlags = redFlags.length - shownRedFlags.length;
@@ -340,22 +342,8 @@ export default async function Home({
                           </div>
                         ) : null}
 
-                        {score ? (
-                          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                            {score}
-                            <span className="flex items-center gap-1 font-mono">
-                              <span>{below != null ? `${formatPct(below)} below` : "—"}</span>
-                              <span>•</span>
-                              <span className={confidenceClass}>{confidenceText}</span>
-                            </span>
-                            <span className="text-[11px] font-medium text-foreground">
-                              {profit != null && profit > 0 ? (
-                                <>
-                                  Save <span className="font-mono">{formatPhp(profit)}</span>
-                                </>
-                              ) : null}
-                            </span>
-                          </div>
+                        {dealSignals ? (
+                          <div className="mt-3">{dealSignals}</div>
                         ) : sortMode === "deals" ? (
                           <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                             <Badge variant="outline" className="h-6 px-2 py-0 text-[11px] text-muted-foreground">
@@ -396,12 +384,14 @@ export default async function Home({
                     {filteredItems.map((row: PublicListing) => (
                       (() => {
                         const dealVisible = showDeal(row);
-                        const score = dealVisible ? dealScoreBadge(row.deal_score) : null;
-                        const below = dealVisible ? row.below_market_pct : null;
-                        const conf = dealVisible ? row.confidence : null;
-                        const profit = dealVisible ? row.est_profit_php : null;
-                        const confidenceText = confidenceLabel(conf);
-                        const confidenceClass = confidenceTone(conf);
+                        const dealSignals = dealVisible ? (
+                          <ListingDealSignals
+                            dealScore={row.deal_score}
+                            belowMarketPct={row.below_market_pct}
+                            confidence={row.confidence}
+                            profit={row.est_profit_php}
+                          />
+                        ) : null;
                         const redFlags = buildRedFlags(row.risk_flags);
                         const shownRedFlags = redFlags.slice(0, 6);
                         const extraRedFlags = redFlags.length - shownRedFlags.length;
@@ -443,26 +433,9 @@ export default async function Home({
                           {row.location_raw || "—"}
                         </TableCell>
                         {showDealColumn ? (
-                          <TableCell className="whitespace-nowrap">
-                            {dealVisible ? (
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground">Score</span>
-                                  {score || <span className="text-muted-foreground">—</span>}
-                                </div>
-                                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                  <span className="font-mono">{below != null ? `${formatPct(below)} below` : "—"}</span>
-                                  <span>•</span>
-                                  <span className={confidenceClass}>{confidenceText}</span>
-                                </div>
-                                <div className="text-[11px] font-medium text-foreground">
-                                  {profit != null && profit > 0 ? (
-                                    <>
-                                      Save <span className="font-mono">{formatPhp(profit)}</span>
-                                    </>
-                                  ) : null}
-                                </div>
-                              </div>
+                          <TableCell className="max-w-[220px]">
+                            {dealSignals ? (
+                              dealSignals
                             ) : sortMode === "deals" ? (
                               <span className="text-xs text-muted-foreground">Unscored</span>
                             ) : null}

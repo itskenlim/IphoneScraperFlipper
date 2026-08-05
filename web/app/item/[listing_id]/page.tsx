@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
 import { AlertTriangle, CheckCircle2, ExternalLink, XCircle } from "lucide-react";
 
+import { DealQualityBadge } from "@/components/deal-quality-badge";
 import { BatteryHealthPill, PublicListingChecklist } from "@/components/listing-signal-pills";
 import { PriceHistoryChart } from "@/components/price-history-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchPrivateListing } from "@/lib/data";
+import { confidencePlainLabel, dealQualityLabel, underSimilarListingsCopy } from "@/lib/dealLabels";
 import { formatDateTime, formatPct, formatPhp, formatRelativeAge, stripEmojiFromTitle } from "@/lib/format";
 import { parseRiskFlags, triStateFromFlags } from "@/lib/riskFlags";
 
@@ -17,20 +19,13 @@ function statusBadge(status: string) {
   return <Badge variant="secondary">active</Badge>;
 }
 
-function dealScoreBadge(score: unknown) {
-  const s = String(score || "").toUpperCase();
-  if (s === "A") return <Badge className="bg-emerald-600 text-white">A</Badge>;
-  if (s === "B") return <Badge className="bg-sky-600 text-white">B</Badge>;
-  if (s === "C") return <Badge className="bg-amber-500 text-white">C</Badge>;
-  if (s === "D") return <Badge variant="secondary">D</Badge>;
-  return <span className="text-muted-foreground">—</span>;
-}
-
 function confidenceBadge(value: unknown) {
+  const label = confidencePlainLabel(value);
+  if (!label) return <span className="text-muted-foreground">—</span>;
   const v = String(value || "").toLowerCase();
-  if (v === "high") return <Badge className="bg-emerald-600 text-white">high</Badge>;
-  if (v === "med") return <Badge className="bg-sky-600 text-white">med</Badge>;
-  if (v === "low") return <Badge variant="secondary">low</Badge>;
+  if (v === "high") return <Badge className="bg-emerald-600 text-white">{label}</Badge>;
+  if (v === "med") return <Badge className="bg-sky-600 text-white">{label}</Badge>;
+  if (v === "low") return <Badge variant="secondary">{label}</Badge>;
   return <span className="text-muted-foreground">—</span>;
 }
 
@@ -120,9 +115,7 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
       : "Not enough similar listings yet";
 
   const belowMarketCopy =
-    listing.below_market_pct != null
-      ? `Priced ${formatPct(listing.below_market_pct)} below similar listings`
-      : "Pricing vs similar listings: —";
+    underSimilarListingsCopy(listing.below_market_pct, formatPct) ?? "Pricing vs similar listings: —";
 
   return (
     <div className="space-y-5 sm:space-y-7">
@@ -144,8 +137,13 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
               {statusBadge(listing.status)}
               <span>•</span>
               <span className="flex items-center gap-2">
-                <span className="text-muted-foreground">score</span>
-                {dealScoreBadge(listing.deal_score)}
+                {dealQualityLabel(listing.deal_score) ? (
+                  <DealQualityBadge score={listing.deal_score} size="md" />
+                ) : String(listing.deal_score || "").toUpperCase() === "D" ? (
+                  <Badge variant="secondary">Weak deal</Badge>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
               </span>
               <span>•</span>
               <span title={formatDateTime(listing.posted_at || listing.first_seen_at)}>
@@ -189,16 +187,24 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
             </div>
             <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">Deal score</span>
-                <span className="flex items-center gap-2">{dealScoreBadge(listing.deal_score)}</span>
+                <span className="text-muted-foreground">Deal</span>
+                <span className="flex items-center gap-2">
+                  {dealQualityLabel(listing.deal_score) ? (
+                    <DealQualityBadge score={listing.deal_score} />
+                  ) : String(listing.deal_score || "").toUpperCase() === "D" ? (
+                    <Badge variant="secondary">Weak deal</Badge>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">Confidence</span>
+                <span className="text-muted-foreground">Comps</span>
                 {confidenceBadge(listing.confidence)}
               </div>
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3 sm:col-span-2">
                 <span className="text-muted-foreground">Pricing</span>
-                <span className="font-mono text-xs">{belowMarketCopy}</span>
+                <span className="text-right text-xs sm:text-sm">{belowMarketCopy}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground">Est. savings</span>
