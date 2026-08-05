@@ -62,6 +62,39 @@ test("face id + truetone working despite 'no issue'", () => {
   );
 });
 
+test("all working truetone & face id not flipped by no sim / no history", () => {
+  const text =
+    "128gb Blue DETAILS -84%bh original battery -All working truetone & Face ID -No sim restrictions -No history of repair -100%Smooth";
+  const issues = detectIssues(text);
+  assert.deepEqual(
+    pick(issues, ["face_id_working", "face_id_not_working", "trutone_working", "trutone_missing"]),
+    {
+      face_id_working: true,
+      face_id_not_working: false,
+      trutone_working: true,
+      trutone_missing: false
+    }
+  );
+});
+
+test("working before feature names counts as positive", () => {
+  const issues = detectIssues("All working truetone & Face ID");
+  assert.deepEqual(
+    pick(issues, ["face_id_working", "face_id_not_working", "trutone_working", "trutone_missing"]),
+    {
+      face_id_working: true,
+      face_id_not_working: false,
+      trutone_working: true,
+      trutone_missing: false
+    }
+  );
+});
+
+test("explicit no face id still flags", () => {
+  const issues = detectIssues("All working except no face id, truetone ok");
+  assert.equal(issues.face_id_not_working, true);
+});
+
 test("issue line with blurd back cam flags camera_issue", () => {
   const issues = detectIssues("ISSUE: BLURD BACK CAM");
   assert.deepEqual(

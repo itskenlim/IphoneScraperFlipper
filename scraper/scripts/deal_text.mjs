@@ -15,6 +15,83 @@ const ALL_WORKING_PHRASES = [
   "all goods"
 ];
 
+// Bare "no" after Face ID / TrueTone often starts seller boilerplate
+// ("No sim restrictions", "No history of repair"), not "no face id".
+const BENIGN_NO_FOLLOWERS = new Set([
+  "sim",
+  "sims",
+  "simcard",
+  "restriction",
+  "restrictions",
+  "history",
+  "repair",
+  "repairs",
+  "issue",
+  "issues",
+  "problem",
+  "problems",
+  "other",
+  "others",
+  "dent",
+  "dents",
+  "scratch",
+  "scratches",
+  "box",
+  "charger",
+  "cable",
+  "brick",
+  "adapter",
+  "password",
+  "passcode",
+  "icode",
+  "icloud",
+  "account",
+  "owner",
+  "openbox"
+]);
+
+const BENIGN_NO_COLLAPSED_PREFIXES = [
+  "nosim",
+  "nosims",
+  "nosimcard",
+  "norestriction",
+  "norestrictions",
+  "nohistory",
+  "norepair",
+  "norepairs",
+  "noissue",
+  "noissues",
+  "noproblem",
+  "noproblems",
+  "noother",
+  "noothers",
+  "nodent",
+  "nodents",
+  "noscratch",
+  "noscratches",
+  "nobox",
+  "nocharger",
+  "nocable",
+  "nopassword",
+  "nopasscode",
+  "noicloud",
+  "noaccount",
+  "noowner",
+  "noopenbox"
+];
+
+function isBenignNoCollapsed(collapsed, noIdx) {
+  if (noIdx < 0) return false;
+  const tail = collapsed.slice(noIdx);
+  return BENIGN_NO_COLLAPSED_PREFIXES.some((p) => tail.startsWith(p));
+}
+
+function isBenignNoToken(tokens, noIdx) {
+  if (noIdx < 0 || tokens[noIdx] !== "no") return false;
+  const next = tokens[noIdx + 1];
+  return Boolean(next && BENIGN_NO_FOLLOWERS.has(next));
+}
+
 const FEATURE_RULES = {
   face_id: {
     sequences: [["face", "id"]],
@@ -231,18 +308,9 @@ function collapsedHasNegativeNear(collapsed, feature, negatives) {
     if (!n) continue;
     let idx = collapsed.indexOf(n);
     while (idx !== -1) {
-      if (n === "no") {
-        // "no issue(s)" / "no problem(s)" means "nothing is wrong" and should not
-        // be treated as a negative signal for nearby features.
-        if (
-          collapsed.startsWith("noissue", idx) ||
-          collapsed.startsWith("noissues", idx) ||
-          collapsed.startsWith("noproblem", idx) ||
-          collapsed.startsWith("noproblems", idx)
-        ) {
-          idx = collapsed.indexOf(n, idx + n.length);
-          continue;
-        }
+      if (n === "no" && isBenignNoCollapsed(collapsed, idx)) {
+        idx = collapsed.indexOf(n, idx + n.length);
+        continue;
       }
       if (n === "issue") {
         if (idx >= 2 && collapsed.slice(idx - 2, idx) === "no") {
@@ -273,6 +341,7 @@ function collapsedHasNegationPrefix(collapsed, feature, negatives) {
     const needle = `${n}${feature}`;
     const idx = collapsed.indexOf(needle);
     if (idx === -1) continue;
+    if (n === "no" && isBenignNoCollapsed(collapsed, idx)) continue;
     if (n === "issue" && idx >= 2 && collapsed.slice(idx - 2, idx) === "no") continue;
     return true;
   }
@@ -302,8 +371,8 @@ function hasNegTokenNear(tokens, positions, tokenSet, window = 2) {
     for (let i = start; i <= end; i++) {
       const token = tokens[i];
       if (!tokenSet.has(token)) continue;
-      // "no issue" / "no problem" means "nothing is wrong", not a missing/broken feature.
-      if (token === "no" && (tokens[i + 1] === "issue" || tokens[i + 1] === "problem")) continue;
+      // "no issue" / "no sim restrictions" / etc. are not feature negatives.
+      if (token === "no" && isBenignNoToken(tokens, i)) continue;
       if (token === "issue" && tokens[i - 1] === "no") continue;
       return true;
     }
@@ -386,8 +455,23 @@ export function detectIssues(text) {
 
   const allWorking = hasAllWorkingPhrase(views.lower);
 
-  const faceWorkingPhrase =
-    /\bface\s*id\b[^\n]{0,24}\b(working|wrking|ok|okay|functional|gagana|naga\s*gana|gana)\b/i.test(views.lower);
+  const workingWord = "(?:working|wrking|ok|okay|functional|gagana|naga\\s*gana|gana)";
+  const faceFeature = "face\\s*id";
+  const truetoneFeature = "(?:true\\s*tone|truetone|trutone|trueton)";
+
+  function hasWorkingNear(featureRe) {
+    if (new RegExp(`\\b${featureRe}\\b[^\\n]{0,24}\\b${workingWord}\\b`, "i").test(views.lower)) {
+      return true;
+    }
+    // "All working truetone & Face ID" — working before the feature is OK,
+    // but not when a negation sits between them ("working … no face id").
+    const rev = new RegExp(`\\b${workingWord}\\b([^\\n]{0,24})\\b${featureRe}\\b`, "i");
+    const m = rev.exec(views.lower);
+    if (!m) return false;
+    return !/\b(no|not|wala|wla|di|dili|dli|indi|way|waay)\b/i.test(m[1]);
+  }
+
+  const faceWorkingPhrase = hasWorkingNear(faceFeature);
   const faceWorkingEmoji =
     /\bface\s*id\b[^\n]{0,6}[✅✔️]/i.test(views.lower) || /[✅✔️][^\n]{0,6}\bface\s*id\b/i.test(views.lower);
   const faceBadEmoji =
@@ -395,21 +479,24 @@ export function detectIssues(text) {
     /(?:❌|✗|✘|\bx\b)[^\n]{0,6}\bface\s*id\b/i.test(views.lower);
   const faceNegPhrase =
     /\b(no|not|wala|wla|di|dili|dli|indi|way|waay)\s+face\s*id\b/i.test(views.lower) ||
-    /\bface\s*id\b[^\n]{0,24}\b(not\s*work(?:ing)?|issue|problem|broken|defect|dead|guba)\b/i.test(views.lower) ||
+    /\bface\s*id\b[^\n]{0,24}\b(not\s*work(?:ing)?|broken|defect|dead|guba)\b/i.test(views.lower) ||
+    // "issue/problem" after Face ID, but not "NO ISSUE" / "NO PROBLEM"
+    /\bface\s*id\b[^\n]{0,24}\b(?<!no\s)(issue|problem)\b/i.test(views.lower) ||
     /\bissue\s*[:\-]\s*face\s*id\b/i.test(views.lower) ||
     ["faceid", "face_id"].some((tok) => {
       const idx = views.collapsed.indexOf(tok);
       if (idx === -1) return false;
       const prefixes = ["no", "not", "wala", "wla", "di", "dili", "dli", "indi", "way", "waay"];
       return prefixes.some((p) => {
-        const pIdx = views.collapsed.indexOf(p);
-        return pIdx !== -1 && Math.abs(pIdx - idx) <= 6;
+        // Require the negation immediately before the feature (nofaceid),
+        // not a later bare "no" from "No sim restrictions" (faceidnosim…).
+        const before = views.collapsed.slice(Math.max(0, idx - p.length), idx);
+        return before === p;
       });
     });
   const truetoneNoPhrase =
     /\b(no|not|wala|wla|di|dili|dli|indi|way|waay)\s+(?:true\s*tone|truetone|trutone|trueton)\b/i.test(views.lower);
-  const truetoneWorkingPhrase =
-    /\b(true\s*tone|truetone|trutone|trueton)\b[^\n]{0,24}\b(working|wrking|ok|okay|functional|gagana|naga\s*gana|gana)\b/i.test(views.lower);
+  const truetoneWorkingPhrase = hasWorkingNear(truetoneFeature);
   const truetoneWorkingEmoji =
     /\b(true\s*tone|truetone|trutone|trueton)\b[^\n]{0,6}[✅✔️]/i.test(views.lower) ||
     /[✅✔️][^\n]{0,6}\b(true\s*tone|truetone|trutone|trueton)\b/i.test(views.lower);
@@ -418,24 +505,34 @@ export function detectIssues(text) {
     /(?:❌|✗|✘|\bx\b)[^\n]{0,6}\b(true\s*tone|truetone|trutone|trueton)\b/i.test(views.lower);
 
   const truetoneMissing =
-    (truetone.negative || truetoneNoPhrase || truetoneBadEmoji) && !truetoneWorkingPhrase && !truetoneWorkingEmoji;
-  const faceNotWorking = faceBadEmoji ? true : !!face.negative && faceNegPhrase;
+    (truetone.negative || truetoneNoPhrase || truetoneBadEmoji) &&
+    !truetoneWorkingPhrase &&
+    !truetoneWorkingEmoji;
+  const faceNotWorking = faceBadEmoji
+    ? true
+    : faceNegPhrase
+      ? true
+      : !!face.negative && !(faceWorkingPhrase || faceWorkingEmoji);
   const faceWorking =
-    (faceWorkingPhrase || faceWorkingEmoji) && !faceNegPhrase
-      ? true
-      : face.positive
+    faceNotWorking
+      ? null
+      : faceWorkingPhrase || faceWorkingEmoji
         ? true
-        : !faceNotWorking && allWorking
+        : face.positive
           ? true
-          : null;
+          : allWorking
+            ? true
+            : null;
   const truetoneWorking =
-    truetoneWorkingPhrase || truetoneWorkingEmoji
-      ? true
-      : truetone.positive
+    truetoneMissing
+      ? null
+      : truetoneWorkingPhrase || truetoneWorkingEmoji
         ? true
-        : !truetoneMissing && allWorking
+        : truetone.positive
           ? true
-          : null;
+          : allWorking
+            ? true
+            : null;
 
   const touchIssue =
     /\b(no|not|wala|wla|di|dili|dli|indi)\s+touch\b/i.test(views.lower) ||

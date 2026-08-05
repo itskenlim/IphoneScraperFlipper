@@ -1,4 +1,6 @@
 import process from "node:process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -45,9 +47,81 @@ function normalizeTitle(value) {
   return s ? s.replace(/\s+/g, " ").trim() : "";
 }
 
-function parseModelFamily(text) {
+/** Generation rank — lower = older. Used when multiple models appear (XR mod → 16). */
+function modelFamilyRank(family) {
+  const f = String(family || "").toLowerCase();
+  if (f === "iphone_se") return 6.5;
+  if (f === "iphone_x") return 10;
+  if (f === "iphone_xr" || f === "iphone_xs") return 11;
+  if (f === "iphone_se_2") return 12.5;
+  if (f === "iphone_se_3") return 14.5;
+  const m = /^iphone_(\d{1,2})$/.exec(f);
+  if (m) {
+    const n = Number.parseInt(m[1], 10);
+    if (Number.isFinite(n)) return n;
+  }
+  return 99;
+}
+
+function hasModificationLanguage(text) {
+  return /\b(modif(?:y|ied|ication)?s?|mod(?:ded)?|converted?|conversion|looks?\s*like|look\s*alike|housing|shell|chassis|casing|naka\s*mod|nakamod)\b/i.test(
+    String(text || "")
+  );
+}
+
+function collectModelFamilies(text) {
+  const s = String(text || "").toLowerCase();
+  if (!s) return [];
+  const found = [];
+  const push = (family) => {
+    if (family && !found.includes(family)) found.push(family);
+  };
+
+  for (const m of s.matchAll(/\biphone\s*(\d{1,2})\b/gi)) {
+    const n = Number.parseInt(m[1], 10);
+    if (Number.isFinite(n) && n >= 7 && n <= 20) push(`iphone_${n}`);
+  }
+  for (const m of s.matchAll(/\bip\s*(\d{1,2})\b/gi)) {
+    const n = Number.parseInt(m[1], 10);
+    if (Number.isFinite(n) && n >= 7 && n <= 20) push(`iphone_${n}`);
+  }
+  for (const m of s.matchAll(/\bip(\d{1,2})\b/gi)) {
+    const n = Number.parseInt(m[1], 10);
+    if (Number.isFinite(n) && n >= 7 && n <= 20) push(`iphone_${n}`);
+  }
+
+  // Letter chassis: require "iphone xr/xs/x" — bare "xr" alone is too noisy,
+  // but "XR modified to 16" still works via "xr" when a numbered model is present.
+  if (/\biphone\s*xr\b/i.test(s)) push("iphone_xr");
+  else if (/\bxr\b/i.test(s) && /\b(?:iphone\s*)?\d{1,2}\b/i.test(s)) push("iphone_xr");
+  if (/\biphone\s*xs\b/i.test(s)) push("iphone_xs");
+  else if (/\bxs\b/i.test(s) && /\b(?:iphone\s*)?\d{1,2}\b/i.test(s)) push("iphone_xs");
+  if (/\biphone\s*x\b/i.test(s)) push("iphone_x");
+
+  if (/\biphone\s*se\b/i.test(s)) {
+    if (/\b(2020|se2|2nd)\b/i.test(s)) push("iphone_se_2");
+    else if (/\b(2022|se3|3rd)\b/i.test(s)) push("iphone_se_3");
+    else push("iphone_se");
+  }
+
+  return found;
+}
+
+export function parseModelFamily(text) {
   const s = String(text || "").toLowerCase();
   if (!s) return null;
+
+  const models = collectModelFamilies(s);
+  if (models.length >= 2) {
+    const letter = new Set(["iphone_xr", "iphone_xs", "iphone_x"]);
+    const hasLetter = models.some((m) => letter.has(m));
+    const hasNumbered = models.some((m) => /^iphone_\d{1,2}$/.test(m));
+    // PH mods: XR (etc.) made to look like a newer numbered iPhone.
+    // Nobody downgrades a 16 into an XR — prefer the older chassis for comps.
+    if (hasModificationLanguage(s) || (hasLetter && hasNumbered)) {
+      return [...models].sort((a, b) => modelFamilyRank(a) - modelFamilyRank(b))[0];
+    }
+  }
 
   // Prefer numbered iPhones first.
   const num = /\biphone\s*(\d{1,2})\b/i.exec(s);
@@ -660,14 +734,19 @@ async function main() {
   console.log("[SUMMARY] deals_done status=success");
 }
 
-main().catch((e) => {
-  const msg = e instanceof Error ? e.message : String(e);
-  console.error(`[ERROR] ${msg}`);
-  if (/relation .*listing_features.* does not exist|relation .*deal_metrics.* does not exist/i.test(msg)) {
-    console.error("[HINT] Run the Supabase SQL migration: scraper/sql/add_deal_intelligence_tables.sql");
-  }
-  if (/column .*condition_raw.* does not exist/i.test(msg)) {
-    console.error("[HINT] Run the Supabase SQL migration: scraper/sql/add_condition_raw.sql");
-  }
-  process.exit(1);
-});
+const isDirectRun =
+  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectRun) {
+  main().catch((e) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[ERROR] ${msg}`);
+    if (/relation .*listing_features.* does not exist|relation .*deal_metrics.* does not exist/i.test(msg)) {
+      console.error("[HINT] Run the Supabase SQL migration: scraper/sql/add_deal_intelligence_tables.sql");
+    }
+    if (/column .*condition_raw.* does not exist/i.test(msg)) {
+      console.error("[HINT] Run the Supabase SQL migration: scraper/sql/add_condition_raw.sql");
+    }
+    process.exit(1);
+  });
+}
