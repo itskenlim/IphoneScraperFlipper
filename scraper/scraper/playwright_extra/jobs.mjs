@@ -215,6 +215,8 @@ export async function runDiscoveryJob({
     let droppedSwap = 0;
     let droppedNoModel = 0;
     let droppedNonIphone = 0;
+    let droppedFbCategory = 0;
+    let droppedAccessory = 0;
 
     for (const row of extracted.rows) {
       const decision = shouldSkipAsNoise(row, cfg);
@@ -227,6 +229,8 @@ export async function runDiscoveryJob({
         else if (decision.reason === "swap_no_price") droppedSwap += 1;
         else if (decision.reason === "no_iphone_model") droppedNoModel += 1;
         else if (decision.reason === "non_iphone_product") droppedNonIphone += 1;
+        else if (decision.reason === "fb_category") droppedFbCategory += 1;
+        else if (decision.reason === "accessory") droppedAccessory += 1;
         continue;
       }
       filtered.push(row);
@@ -236,7 +240,8 @@ export async function runDiscoveryJob({
       log(
         `[INFO] discovery_filter dropped=${dropped} dropped_min_price=${droppedMinPrice} dropped_no_price=${droppedNoPrice} ` +
           `dropped_keyword=${droppedKeyword} dropped_buyer=${droppedBuyer} dropped_swap=${droppedSwap} ` +
-          `dropped_no_model=${droppedNoModel} dropped_non_iphone=${droppedNonIphone} kept=${filtered.length}`
+          `dropped_no_model=${droppedNoModel} dropped_non_iphone=${droppedNonIphone} ` +
+          `dropped_fb_category=${droppedFbCategory} dropped_accessory=${droppedAccessory} kept=${filtered.length}`
       );
     }
 

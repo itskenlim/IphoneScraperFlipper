@@ -183,6 +183,10 @@ export type Database = {
           listing_price_amount: number | null
           listing_price_formatted: string | null
           listing_seller_id: string | null
+          listing_seller_name: string | null
+          listing_category_name: string | null
+          listing_leaf_category_name: string | null
+          listing_taxonomy_name: string | null
           listing_strikethrough_price: string | null
           location_raw: string | null
           posted_at: string | null
@@ -211,6 +215,10 @@ export type Database = {
           listing_price_amount?: number | null
           listing_price_formatted?: string | null
           listing_seller_id?: string | null
+          listing_seller_name?: string | null
+          listing_category_name?: string | null
+          listing_leaf_category_name?: string | null
+          listing_taxonomy_name?: string | null
           listing_strikethrough_price?: string | null
           location_raw?: string | null
           posted_at?: string | null
@@ -239,6 +247,10 @@ export type Database = {
           listing_price_amount?: number | null
           listing_price_formatted?: string | null
           listing_seller_id?: string | null
+          listing_seller_name?: string | null
+          listing_category_name?: string | null
+          listing_leaf_category_name?: string | null
+          listing_taxonomy_name?: string | null
           listing_strikethrough_price?: string | null
           location_raw?: string | null
           posted_at?: string | null

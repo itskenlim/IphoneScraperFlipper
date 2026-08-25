@@ -92,6 +92,7 @@ async function main() {
     const cleanupReasons = new Set([
       "non_iphone_product",
       "accessory",
+      "fb_category",
       "exclude_keyword",
       "buyer_post",
       "no_iphone_model"

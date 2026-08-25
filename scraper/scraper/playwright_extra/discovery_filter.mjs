@@ -173,6 +173,48 @@ export function looksLikeAccessoryListing(title, _description = "") {
 }
 
 /**
+ * Facebook Marketplace category from GraphQL feed (leaf / taxonomy / top-level).
+ * Drops Cases & Skins and non-phone categories; keeps Mobile phones + iPhone leaf.
+ */
+export function looksLikeFbNonPhoneCategory(row = {}) {
+  const leaf = String(row.listing_leaf_category_name || "").trim().toLowerCase();
+  const taxonomy = String(row.listing_taxonomy_name || "").trim().toLowerCase();
+  const category = String(row.listing_category_name || "").trim().toLowerCase();
+
+  if (!leaf && !taxonomy && !category) return false;
+
+  // Trust explicit iPhone leaf even if taxonomy is wrong/stale.
+  const iphoneLeaf = leaf === "iphone" || /^iphones?$/.test(leaf);
+  if (iphoneLeaf) return false;
+
+  const accessoryLeaf =
+    /\bcases?\b/.test(leaf) ||
+    /\bskins?\b/.test(leaf) ||
+    /\bcovers?\b/.test(leaf) ||
+    /screen\s*protector/.test(leaf) ||
+    /\bchargers?\b/.test(leaf) ||
+    /\bcables?\b/.test(leaf);
+  if (accessoryLeaf) return true;
+
+  if (/cases?/.test(taxonomy) && (/covers?/.test(taxonomy) || /skins?/.test(taxonomy))) {
+    return true;
+  }
+
+  if (category) {
+    const phoneCategory =
+      /mobile\s*phones?/.test(category) ||
+      /cell\s*phones?/.test(category) ||
+      /^electronics$/.test(category);
+    if (!phoneCategory) return true;
+    if (/miscellaneous|clothing|shoes|furniture|vehicles?|property/.test(category)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * @param {object} row
  * @param {object} cfg
  * @returns {{ skip: boolean, reason: string | null }}
@@ -191,6 +233,12 @@ export function shouldSkipAsNoise(row, cfg = {}) {
   if (cfg.discoveryRejectNonIphoneProduct !== false) {
     if (looksLikeNonIphoneProduct(titleRaw, description)) {
       return { skip: true, reason: "non_iphone_product" };
+    }
+  }
+
+  if (cfg.discoveryRejectFbCategory !== false) {
+    if (looksLikeFbNonPhoneCategory(row)) {
+      return { skip: true, reason: "fb_category" };
     }
   }
 

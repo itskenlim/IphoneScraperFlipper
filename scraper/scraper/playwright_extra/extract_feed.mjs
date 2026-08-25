@@ -344,6 +344,26 @@ function normalizeNetworkListing(node) {
     listing.seller?.id ||
     listing.seller_id ||
     null;
+  const sellerName =
+    pickText(listing.marketplace_listing_seller?.name) ||
+    pickText(listing.seller?.name) ||
+    pickText(listing.seller_name) ||
+    null;
+
+  const categoryName =
+    pickText(listing.marketplace_listing_category_name) ||
+    pickText(listing.listing_category_name) ||
+    pickText(node.marketplace_listing_category_name) ||
+    null;
+  const leafCategoryName =
+    pickText(listing.marketplace_listing_leaf_vt_category_name) ||
+    pickText(listing.marketplace_listing_leaf_category_name) ||
+    pickText(node.marketplace_listing_leaf_vt_category_name) ||
+    null;
+  const taxonomyName =
+    pickText(listing.marketplace_listing_virtual_taxonomy_category?.name) ||
+    pickText(listing.virtual_taxonomy_category?.name) ||
+    null;
 
   let isLive = typeof listing.is_live === "boolean" ? listing.is_live : null;
   let isSold = typeof listing.is_sold === "boolean" ? listing.is_sold : null;
@@ -380,6 +400,10 @@ function normalizeNetworkListing(node) {
     listing_is_pending: isPending,
     listing_is_hidden: isHidden,
     listing_seller_id: cleanText(sellerId),
+    listing_seller_name: cleanText(sellerName),
+    listing_category_name: cleanText(categoryName),
+    listing_leaf_category_name: cleanText(leafCategoryName),
+    listing_taxonomy_name: cleanText(taxonomyName),
     listing_location_city: cleanText(locationCity),
     listing_location_state: cleanText(locationState)
   };
@@ -395,6 +419,9 @@ function normalizeNetworkListing(node) {
     normalized.listing_is_pending != null ||
     normalized.listing_is_hidden != null ||
     cleanText(normalized.listing_seller_id) ||
+    cleanText(normalized.listing_seller_name) ||
+    cleanText(normalized.listing_category_name) ||
+    cleanText(normalized.listing_leaf_category_name) ||
     cleanText(normalized.listing_location_city) ||
     cleanText(normalized.listing_location_state);
 

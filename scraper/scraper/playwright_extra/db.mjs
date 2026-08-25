@@ -118,6 +118,30 @@ function buildDiscoveryNetworkUpdate(row, nowIso) {
     hasField = true;
   }
 
+  const sellerName = cleanText(row.listing_seller_name);
+  if (sellerName) {
+    payload.listing_seller_name = sellerName;
+    hasField = true;
+  }
+
+  const categoryName = cleanText(row.listing_category_name);
+  if (categoryName) {
+    payload.listing_category_name = categoryName;
+    hasField = true;
+  }
+
+  const leafCategoryName = cleanText(row.listing_leaf_category_name);
+  if (leafCategoryName) {
+    payload.listing_leaf_category_name = leafCategoryName;
+    hasField = true;
+  }
+
+  const taxonomyName = cleanText(row.listing_taxonomy_name);
+  if (taxonomyName) {
+    payload.listing_taxonomy_name = taxonomyName;
+    hasField = true;
+  }
+
   const locationCity = cleanText(row.listing_location_city);
   if (locationCity) {
     payload.listing_location_city = locationCity;
@@ -186,7 +210,7 @@ export async function persistToDatabase(rows, { log, phase } = {}) {
       supabase
         .from("listings")
         .select(
-          "id,listing_id,title,description,condition_raw,location_raw,price_raw,price_php,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,monitor_last_checked_at,monitor_next_check_at,monitor_fail_count,monitor_lockout_until,listing_price_amount,listing_price_formatted,listing_strikethrough_price,listing_is_live,listing_is_sold,listing_is_pending,listing_is_hidden,listing_seller_id,listing_location_city,listing_location_state"
+          "id,listing_id,title,description,condition_raw,location_raw,price_raw,price_php,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,monitor_last_checked_at,monitor_next_check_at,monitor_fail_count,monitor_lockout_until,listing_price_amount,listing_price_formatted,listing_strikethrough_price,listing_is_live,listing_is_sold,listing_is_pending,listing_is_hidden,listing_seller_id,listing_seller_name,listing_category_name,listing_leaf_category_name,listing_taxonomy_name,listing_location_city,listing_location_state"
         )
         .in("listing_id", listingIds),
     { retries, baseDelayMs, log, label: "db_existing_select" }
@@ -226,6 +250,10 @@ export async function persistToDatabase(rows, { log, phase } = {}) {
     const incomingIsPending = typeof row.listing_is_pending === "boolean" ? row.listing_is_pending : null;
     const incomingIsHidden = typeof row.listing_is_hidden === "boolean" ? row.listing_is_hidden : null;
     const incomingSellerId = cleanText(row.listing_seller_id);
+    const incomingSellerName = cleanText(row.listing_seller_name);
+    const incomingCategoryName = cleanText(row.listing_category_name);
+    const incomingLeafCategoryName = cleanText(row.listing_leaf_category_name);
+    const incomingTaxonomyName = cleanText(row.listing_taxonomy_name);
     const incomingLocationCity = cleanText(row.listing_location_city);
     const incomingLocationState = cleanText(row.listing_location_state);
 
@@ -237,6 +265,10 @@ export async function persistToDatabase(rows, { log, phase } = {}) {
     let nextListingIsPending = incomingIsPending;
     let nextListingIsHidden = incomingIsHidden;
     let nextListingSellerId = incomingSellerId;
+    let nextListingSellerName = incomingSellerName;
+    let nextListingCategoryName = incomingCategoryName;
+    let nextListingLeafCategoryName = incomingLeafCategoryName;
+    let nextListingTaxonomyName = incomingTaxonomyName;
     let nextListingLocationCity = incomingLocationCity;
     let nextListingLocationState = incomingLocationState;
 
@@ -253,6 +285,18 @@ export async function persistToDatabase(rows, { log, phase } = {}) {
       const existingSellerId = cleanText(existing.listing_seller_id);
       if (existingSellerId) {
         nextListingSellerId = existingSellerId;
+      }
+      if (!cleanText(nextListingSellerName) && cleanText(existing.listing_seller_name)) {
+        nextListingSellerName = cleanText(existing.listing_seller_name);
+      }
+      if (!cleanText(nextListingCategoryName) && cleanText(existing.listing_category_name)) {
+        nextListingCategoryName = cleanText(existing.listing_category_name);
+      }
+      if (!cleanText(nextListingLeafCategoryName) && cleanText(existing.listing_leaf_category_name)) {
+        nextListingLeafCategoryName = cleanText(existing.listing_leaf_category_name);
+      }
+      if (!cleanText(nextListingTaxonomyName) && cleanText(existing.listing_taxonomy_name)) {
+        nextListingTaxonomyName = cleanText(existing.listing_taxonomy_name);
       }
       const existingLocationCity = cleanText(existing.listing_location_city);
       if (existingLocationCity) {
@@ -355,6 +399,10 @@ export async function persistToDatabase(rows, { log, phase } = {}) {
       listing_is_pending: nextListingIsPending,
       listing_is_hidden: nextListingIsHidden,
       listing_seller_id: nextListingSellerId,
+      listing_seller_name: nextListingSellerName,
+      listing_category_name: nextListingCategoryName,
+      listing_leaf_category_name: nextListingLeafCategoryName,
+      listing_taxonomy_name: nextListingTaxonomyName,
       listing_location_city: nextListingLocationCity,
       listing_location_state: nextListingLocationState,
       status: row.listing_status || "active",
@@ -396,6 +444,18 @@ export async function persistToDatabase(rows, { log, phase } = {}) {
       }
       if ((nextListingSellerId ?? null) !== (existing.listing_seller_id ?? null)) {
         changedFields.push("listing_seller_id");
+      }
+      if ((nextListingSellerName ?? null) !== (existing.listing_seller_name ?? null)) {
+        changedFields.push("listing_seller_name");
+      }
+      if ((nextListingCategoryName ?? null) !== (existing.listing_category_name ?? null)) {
+        changedFields.push("listing_category_name");
+      }
+      if ((nextListingLeafCategoryName ?? null) !== (existing.listing_leaf_category_name ?? null)) {
+        changedFields.push("listing_leaf_category_name");
+      }
+      if ((nextListingTaxonomyName ?? null) !== (existing.listing_taxonomy_name ?? null)) {
+        changedFields.push("listing_taxonomy_name");
       }
       if ((nextListingLocationCity ?? null) !== (existing.listing_location_city ?? null)) {
         changedFields.push("listing_location_city");
@@ -658,6 +718,10 @@ export async function persistDiscoveryInsertOnly(rows, { log } = {}) {
     const isPending = typeof row.listing_is_pending === "boolean" ? row.listing_is_pending : null;
     const isHidden = typeof row.listing_is_hidden === "boolean" ? row.listing_is_hidden : null;
     const sellerId = cleanText(row.listing_seller_id);
+    const sellerName = cleanText(row.listing_seller_name);
+    const categoryName = cleanText(row.listing_category_name);
+    const leafCategoryName = cleanText(row.listing_leaf_category_name);
+    const taxonomyName = cleanText(row.listing_taxonomy_name);
     const locationCity = cleanText(row.listing_location_city);
     const locationState = cleanText(row.listing_location_state);
 
@@ -685,6 +749,10 @@ export async function persistDiscoveryInsertOnly(rows, { log } = {}) {
       listing_is_pending: isPending,
       listing_is_hidden: isHidden,
       listing_seller_id: sellerId,
+      listing_seller_name: sellerName,
+      listing_category_name: categoryName,
+      listing_leaf_category_name: leafCategoryName,
+      listing_taxonomy_name: taxonomyName,
       listing_location_city: locationCity,
       listing_location_state: locationState,
       status: row.listing_status || "active",

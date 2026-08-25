@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   hasIphoneModel,
   looksLikeAccessoryListing,
+  looksLikeFbNonPhoneCategory,
   looksLikeNonIphoneProduct,
   shouldSkipAsNoise
 } from "../scraper/playwright_extra/discovery_filter.mjs";
@@ -164,4 +165,61 @@ test("phone with free case is kept when priced", () => {
   );
   assert.equal(decision.skip, false);
   assert.equal(decision.reason, null);
+});
+
+test("FB leaf Cases & Skins is dropped as fb_category", () => {
+  assert.equal(
+    looksLikeFbNonPhoneCategory({
+      listing_category_name: "Mobile phones",
+      listing_leaf_category_name: "Cases & Skins",
+      listing_taxonomy_name: "Cases, Covers & Skins"
+    }),
+    true
+  );
+  const decision = shouldSkipAsNoise(
+    {
+      title: "Iphone 16",
+      price_php: 38999,
+      listing_category_name: "Mobile phones",
+      listing_leaf_category_name: "Cases & Skins"
+    },
+    baseCfg
+  );
+  assert.equal(decision.skip, true);
+  assert.equal(decision.reason, "fb_category");
+});
+
+test("FB Mobile phones + iPhone leaf is kept", () => {
+  assert.equal(
+    looksLikeFbNonPhoneCategory({
+      listing_category_name: "Mobile phones",
+      listing_leaf_category_name: "iPhone",
+      listing_taxonomy_name: "Cell Phones"
+    }),
+    false
+  );
+  const decision = shouldSkipAsNoise(
+    {
+      title: "IPHONE 13",
+      price_php: 21999,
+      listing_category_name: "Mobile phones",
+      listing_leaf_category_name: "iPhone"
+    },
+    baseCfg
+  );
+  assert.equal(decision.skip, false);
+});
+
+test("FB clothing category without iPhone leaf is dropped", () => {
+  const decision = shouldSkipAsNoise(
+    {
+      title: "iPhone merch tee",
+      price_php: 5000,
+      listing_category_name: "Men's clothing & shoes",
+      listing_leaf_category_name: "T-Shirts"
+    },
+    baseCfg
+  );
+  assert.equal(decision.skip, true);
+  assert.equal(decision.reason, "fb_category");
 });
