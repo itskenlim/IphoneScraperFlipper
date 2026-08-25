@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   hasIphoneModel,
+  looksLikeAccessoryListing,
   looksLikeNonIphoneProduct,
   shouldSkipAsNoise
 } from "../scraper/playwright_extra/discovery_filter.mjs";
@@ -127,4 +128,40 @@ test("swap with no price is dropped", () => {
   );
   assert.equal(decision.skip, true);
   assert.equal(decision.reason, "swap_no_price");
+});
+
+test("accessory-as-product titles are detected", () => {
+  assert.equal(looksLikeAccessoryListing("Iphone 13 case"), true);
+  assert.equal(looksLikeAccessoryListing("case for iphone 13"), true);
+  assert.equal(looksLikeAccessoryListing("Tempered glass iPhone 13"), true);
+  assert.equal(looksLikeAccessoryListing("iPhone 14 Pro Max screen protector"), true);
+  assert.equal(looksLikeAccessoryListing("iPhone charger only"), true);
+  assert.equal(looksLikeAccessoryListing("IP13 cover clear"), true);
+});
+
+test("phone listings with bonus case/charger are not accessories", () => {
+  assert.equal(looksLikeAccessoryListing("iPhone 13 128gb with free case"), false);
+  assert.equal(looksLikeAccessoryListing("iPhone 14 kasama case"), false);
+  assert.equal(looksLikeAccessoryListing("iPhone 13 with case"), false);
+  assert.equal(looksLikeAccessoryListing("iPhone 15 Pro includes case and charger"), false);
+  assert.equal(looksLikeAccessoryListing("iPhone 13 128gb openline no case"), false);
+  assert.equal(looksLikeAccessoryListing("iPhone 13 128gb 100% BH openline Iloilo"), false);
+});
+
+test("accessory listings are skipped as noise", () => {
+  const decision = shouldSkipAsNoise(
+    { title: "Iphone 13 case", price_php: 150 },
+    baseCfg
+  );
+  assert.equal(decision.skip, true);
+  assert.equal(decision.reason, "accessory");
+});
+
+test("phone with free case is kept when priced", () => {
+  const decision = shouldSkipAsNoise(
+    { title: "iPhone 13 128gb with free case openline", price_php: 14500 },
+    baseCfg
+  );
+  assert.equal(decision.skip, false);
+  assert.equal(decision.reason, null);
 });

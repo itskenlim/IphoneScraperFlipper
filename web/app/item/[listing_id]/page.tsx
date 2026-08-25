@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, ExternalLink, XCircle } from "lucide-react
 
 import { DealQualityBadge } from "@/components/deal-quality-badge";
 import { BatteryHealthPill, PublicListingChecklist } from "@/components/listing-signal-pills";
+import { MonitorPausedNote } from "@/components/monitor-paused-note";
 import { PriceHistoryChart } from "@/components/price-history-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { fetchPrivateListing } from "@/lib/data";
 import { confidencePlainLabel, dealQualityLabel, underSimilarListingsCopy } from "@/lib/dealLabels";
 import { formatDateTime, formatPct, formatPhp, formatRelativeAge, stripEmojiFromTitle } from "@/lib/format";
+import { isMonitorPaused } from "@/lib/listingMonitor";
 import { parseRiskFlags, triStateFromFlags } from "@/lib/riskFlags";
 
 function statusBadge(status: string) {
@@ -39,6 +41,8 @@ function buildWarnings(listing: any): string[] {
   if (flags.dead_unit) warnings.push("Doesn't turn on / dead unit");
   if (flags.water_damage) warnings.push("Water damage");
   if (flags.price_too_low) warnings.push("Tikalon price check");
+  if (flags.price_mismatch) warnings.push("Listing vs description price mismatch");
+  if (flags.price_unverified) warnings.push("Price far below market — unverified");
   if (flags.audio_issue) warnings.push("Mic / speaker issue");
   if (flags.face_id_not_working) warnings.push("Face ID not working");
   if (flags.screen_issue) warnings.push("Screen problem");
@@ -75,6 +79,8 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
     flags.for_parts ||
     flags.dead_unit ||
     flags.water_damage ||
+    flags.price_too_low ||
+    flags.price_unverified ||
     score === "NA";
   const faceIdTri = triStateFromFlags(flags, "face_id_working", "face_id_not_working");
   const trutoneTri = triStateFromFlags(flags, "trutone_working", "trutone_missing");
@@ -90,24 +96,36 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
   const verdictTitle = goodDeal
     ? "Good deal"
     : hardBlocked
-      ? flags.for_parts || flags.dead_unit || flags.water_damage
-        ? "For parts / not a usable phone"
-        : "High risk — not recommended"
-      : profit != null && profit <= 0
-        ? "Priced at or above typical"
-        : confidence === "low"
-          ? "Low confidence — needs a quick check"
-          : "Needs a quick manual check";
+      ? flags.price_too_low
+        ? "Price too low to trust"
+        : flags.price_unverified
+          ? "Price unverified"
+          : flags.for_parts || flags.dead_unit || flags.water_damage
+            ? "For parts / not a usable phone"
+            : "High risk — not recommended"
+      : flags.price_mismatch
+        ? "Check description price"
+        : profit != null && profit <= 0
+          ? "Priced at or above typical"
+          : confidence === "low"
+            ? "Low confidence — needs a quick check"
+            : "Needs a quick manual check";
 
   const verdictReason = hardBlocked
-    ? flags.for_parts || flags.dead_unit || flags.water_damage
-      ? "Listed as dead, water-damaged, or for repair/parts — savings do not apply."
-      : "Major risk flags were detected."
-    : profit != null && profit <= 0
-      ? "Similar phones usually sell around this price or lower."
-      : confidence === "low"
-        ? "Not enough similar listings for strong confidence."
-        : "Worth a closer look before deciding.";
+    ? flags.price_too_low
+      ? "Ask is far below a realistic phone price. Hidden until the seller updates it (monitor will re-check)."
+      : flags.price_unverified
+        ? "Ask is far below similar listings and the description has no clear selling price."
+        : flags.for_parts || flags.dead_unit || flags.water_damage
+          ? "Listed as dead, water-damaged, or for repair/parts — savings do not apply."
+          : "Major risk flags were detected."
+    : flags.price_mismatch && flags.desc_ask_php != null
+      ? `Marketplace price field differs from the description ask (₱${Number(flags.desc_ask_php).toLocaleString("en-PH")}). Deal scored using the description.`
+      : profit != null && profit <= 0
+        ? "Similar phones usually sell around this price or lower."
+        : confidence === "low"
+          ? "Not enough similar listings for strong confidence."
+          : "Worth a closer look before deciding.";
 
   const compsLabel =
     listing.comp_sample_size != null
@@ -151,6 +169,9 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
                 {!listing.posted_at ? " (est.)" : ""}
               </span>
             </div>
+            {isMonitorPaused(listing.posted_at, listing.first_seen_at) ? (
+              <MonitorPausedNote className="mt-2" />
+            ) : null}
           </div>
 
           <div className="flex flex-col items-stretch gap-2 sm:items-end">

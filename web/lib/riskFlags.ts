@@ -1,4 +1,4 @@
-export type ParsedRiskFlags = Record<string, boolean>;
+export type ParsedRiskFlags = Record<string, boolean | number>;
 
 function tryParseJson(value: string): unknown {
   try {
@@ -21,6 +21,7 @@ export function parseRiskFlags(value: unknown): ParsedRiskFlags {
   const out: ParsedRiskFlags = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (typeof v === "boolean") out[k] = v;
+    else if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
     else if (v === 1) out[k] = true;
     else if (v === 0) out[k] = false;
   }

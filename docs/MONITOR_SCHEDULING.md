@@ -29,13 +29,11 @@ Classification uses **listing age**, **`deal_metrics.deal_score`**, and **`last_
 |------|-----------------|--------------------------|
 | **hot** | Age ≤ 3d, deal score **A/B**, or price changed within 48h | 6 hours |
 | **warm** | Age 3–7d, score **C**, or older but still moving | 24 hours |
-| **cold** | Age > 7d, score **D/NA/missing**, price unchanged ≥ 7d | 7 days (168h) |
+| **cold** | Age > 7d, score **D/NA/missing**, price unchanged ≥ 7d | not visited (age cap) |
 
-**Why not drop cold listings entirely?** Sellers sometimes cut price on day 10+. A weekly cold check still catches that without spending hot-tier bandwidth on stale inventory.
+Listings older than **7 days** (`PLAYWRIGHT_MONITOR_MAX_AGE_DAYS`) are **not selected** for monitor, even if `monitor_next_check_at` is due. Last-known prices still feed **~30-day comps**. The UI notes that those listings are no longer monitored.
 
 ### Failure backoff
-
-Failed monitor visits (network error, block, parse failure) **do not** advance `monitor_last_checked_at`. Instead:
 
 1. `monitor_fail_count` increments
 2. `monitor_lockout_until` = exponential backoff (5m → 10m → 20m … cap 120m)
@@ -71,6 +69,7 @@ PLAYWRIGHT_MONITOR_WARM_INTERVAL_HOURS=24
 PLAYWRIGHT_MONITOR_COLD_INTERVAL_HOURS=168
 PLAYWRIGHT_MONITOR_PRICE_CHANGE_HOT_HOURS=48
 PLAYWRIGHT_MONITOR_COLD_STALE_PRICE_DAYS=7
+PLAYWRIGHT_MONITOR_MAX_AGE_DAYS=7
 PLAYWRIGHT_MONITOR_FAIL_LOCKOUT_BASE_MINUTES=5
 PLAYWRIGHT_MONITOR_FAIL_LOCKOUT_MAX_MINUTES=120
 PLAYWRIGHT_MONITOR_FETCH_POOL_MULTIPLIER=3

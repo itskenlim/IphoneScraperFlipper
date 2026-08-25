@@ -4,7 +4,9 @@ import { describe, it } from "node:test";
 import {
   computeMonitorTier,
   computeNextCheckAt,
+  isEligibleForMonitor,
   isListingDueForMonitor,
+  isTooOldToMonitor,
   lockoutMinutes,
   readMonitorScheduleConfig
 } from "../scraper/playwright_extra/monitor_schedule.mjs";
@@ -69,5 +71,29 @@ describe("monitor_schedule", () => {
     assert.equal(lockoutMinutes(1, config), 5);
     assert.equal(lockoutMinutes(3, config), 20);
     assert.equal(lockoutMinutes(99, config), config.failLockoutMaxMinutes);
+  });
+
+  it("skips listings older than max monitor age", () => {
+    assert.equal(
+      isTooOldToMonitor({ posted_at: "2026-07-01T12:00:00.000Z" }, config, now),
+      true
+    );
+    assert.equal(
+      isTooOldToMonitor({ posted_at: "2026-07-10T12:00:00.000Z" }, config, now),
+      false
+    );
+    assert.equal(
+      isTooOldToMonitor({ first_seen_at: "2026-07-12T00:00:00.000Z" }, config, now),
+      false
+    );
+  });
+
+  it("due listings past max age are not eligible", () => {
+    const oldDue = {
+      posted_at: "2026-06-01T00:00:00.000Z",
+      monitor_next_check_at: "2026-07-12T11:00:00.000Z"
+    };
+    assert.equal(isListingDueForMonitor(oldDue, now), true);
+    assert.equal(isEligibleForMonitor(oldDue, config, now), false);
   });
 });

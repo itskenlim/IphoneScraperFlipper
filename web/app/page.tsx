@@ -1,23 +1,14 @@
-import { BadgePercent, Clock, Flag, Radar, ShieldCheck } from "lucide-react";
+import { BadgePercent, Clock, Radar, ShieldCheck } from "lucide-react";
 
-import { ListingSignalPills } from "@/components/listing-signal-pills";
+import { HeroLiveDeal, LiveDealsStrip } from "@/components/live-deals-strip";
+import { MarketSnapshot } from "@/components/market-snapshot";
 import { NavButtonLink } from "@/components/nav-pending";
-import { Badge } from "@/components/ui/badge";
+import { PriceGuide } from "@/components/price-guide";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { fetchMarketPulse } from "@/lib/marketPulse";
 
-const previewRiskFlags = {
-  face_id_working: true,
-  trutone_working: true,
-  lcd_replaced: true,
-  network_locked: false,
-  no_description: false
-};
-
-const stats = [
-  { label: "Fair prices", value: "Find cheaper phones", helper: "See what’s priced below typical" },
-  { label: "Risk checks", value: "Buy with more confidence", helper: "Face ID, screen, locks, and more" },
-  { label: "Fresh listings", value: "Catch deals early", helper: "Listings checked on a schedule" }
-];
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const steps = [
   {
@@ -56,7 +47,10 @@ const benefits = [
   }
 ];
 
-export default function Home() {
+export default async function Home() {
+  const pulse = await fetchMarketPulse();
+  const heroDeal = pulse.topDeals[0] ?? null;
+
   return (
     <div className="space-y-12 sm:space-y-16">
       <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
@@ -69,88 +63,28 @@ export default function Home() {
             message the seller.
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
-            <NavButtonLink href="/listings" className="min-w-[160px]" pendingLabel="Opening listings…">
-              View Listings
+            <NavButtonLink href="/listings?sort=deals" className="min-w-[160px]" pendingLabel="Opening listings…">
+              View deals
+            </NavButtonLink>
+            <NavButtonLink
+              href="/listings?sort=latest"
+              variant="outline"
+              className="min-w-[160px]"
+              pendingLabel="Opening listings…"
+            >
+              Newest listings
             </NavButtonLink>
           </div>
         </div>
 
-        <Card className="relative overflow-hidden border-border/70 bg-card/80 shadow-[0_0_30px_rgba(37,99,235,0.12)]">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-lg">Live Preview</CardTitle>
-            <CardDescription>See if the price looks fair.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold">iPhone 12 Pro 128GB</div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span>Iloilo City · active</span>
-                  <Badge
-                    variant="outline"
-                    className="border-border bg-muted/40 text-[11px] text-muted-foreground"
-                  >
-                    Just posted
-                  </Badge>
-                </div>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <Badge variant="secondary" className="bg-emerald-600 text-white">
-                  Good Deal?
-                </Badge>
-                <span className="text-xs text-muted-foreground">Confidence: Medium</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="rounded-lg border border-border bg-muted/30 p-2">
-                <div className="text-muted-foreground">Below typical</div>
-                <div className="font-mono text-sm">22%</div>
-              </div>
-              <div className="rounded-lg border border-border bg-muted/30 p-2">
-                <div className="text-muted-foreground">Est. savings</div>
-                <div className="font-mono text-sm">Save ₱1,500</div>
-              </div>
-              <div className="rounded-lg border border-border bg-muted/30 p-2">
-                <div className="text-muted-foreground">Good deal?</div>
-                <div className="font-mono text-sm">Yes</div>
-              </div>
-            </div>
-            <ListingSignalPills
-              variant="detail"
-              maxWarnings={2}
-              riskFlags={previewRiskFlags}
-              batteryHealth={87}
-              openline={true}
-            />
-            <div className="rounded-lg border border-rose-500/60 bg-rose-500/5 p-3 text-xs text-muted-foreground">
-              <div className="flex items-center gap-2 font-medium text-rose-300">
-                <Flag className="h-4 w-4" />
-                Red Flags
-              </div>
-              <ul className="mt-2 list-disc space-y-1 pl-4">
-                <li>LCD replaced</li>
-                <li>Screen issue likely</li>
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
+        <HeroLiveDeal deal={heroDeal} />
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        {stats.map((stat) => (
-          <Card key={stat.label} className="border-border/70 bg-card/70">
-            <CardContent className="flex min-h-[120px] flex-col justify-center gap-2 p-4">
-              <div className="text-xs text-muted-foreground">{stat.label}</div>
-              <div className="text-lg font-semibold text-foreground">
-                <span className="font-mono" style={{ textShadow: "0 0 12px rgba(37,99,235,0.35)" }}>
-                  {stat.value}
-                </span>
-              </div>
-              <div className="text-xs text-muted-foreground">{stat.helper}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </section>
+      <MarketSnapshot pulse={pulse} />
+
+      <PriceGuide models={pulse.models} defaultKey={pulse.defaultKey} />
+
+      <LiveDealsStrip deals={pulse.topDeals} />
 
       <section className="space-y-4">
         <div className="space-y-1">
@@ -221,7 +155,7 @@ export default function Home() {
             <CardDescription>See what’s available near you right now.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <NavButtonLink href="/listings" className="w-full" pendingLabel="Opening listings…">
+            <NavButtonLink href="/listings?sort=deals" className="w-full" pendingLabel="Opening listings…">
               View listings
             </NavButtonLink>
             <p className="text-xs text-muted-foreground">Compare prices and risks before you buy.</p>

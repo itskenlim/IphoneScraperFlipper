@@ -91,6 +91,7 @@ async function main() {
     // Cleanup targets product-identity noise, not every historical min_price miss.
     const cleanupReasons = new Set([
       "non_iphone_product",
+      "accessory",
       "exclude_keyword",
       "buyer_post",
       "no_iphone_model"

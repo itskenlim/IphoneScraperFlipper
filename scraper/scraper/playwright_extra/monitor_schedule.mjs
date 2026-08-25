@@ -20,6 +20,8 @@ export function readMonitorScheduleConfig() {
     coldIntervalHours: envInt("PLAYWRIGHT_MONITOR_COLD_INTERVAL_HOURS", 168),
     priceChangeHotHours: envInt("PLAYWRIGHT_MONITOR_PRICE_CHANGE_HOT_HOURS", 48),
     coldStalePriceDays: envInt("PLAYWRIGHT_MONITOR_COLD_STALE_PRICE_DAYS", 7),
+    /** Stop visiting listings older than this (comps still use last-known prices). */
+    maxMonitorAgeDays: envInt("PLAYWRIGHT_MONITOR_MAX_AGE_DAYS", 7),
     failLockoutBaseMinutes: envInt("PLAYWRIGHT_MONITOR_FAIL_LOCKOUT_BASE_MINUTES", 5),
     failLockoutMaxMinutes: envInt("PLAYWRIGHT_MONITOR_FAIL_LOCKOUT_MAX_MINUTES", 120),
     fetchPoolMultiplier: envInt("PLAYWRIGHT_MONITOR_FETCH_POOL_MULTIPLIER", 3)
@@ -118,6 +120,18 @@ export function isListingDueForMonitor(listing, nowMs = Date.now()) {
   const nextMs = parseIsoMs(listing?.monitor_next_check_at);
   if (nextMs == null) return true;
   return nextMs <= nowMs;
+}
+
+/** True when the listing is past the monitor age cap (posted/first seen). */
+export function isTooOldToMonitor(listing, config, nowMs = Date.now()) {
+  const maxDays = Math.max(1, config?.maxMonitorAgeDays ?? 7);
+  const ageMs = listingAgeMs(listing, nowMs);
+  if (ageMs == null) return false;
+  return ageMs > maxDays * 24 * 60 * 60 * 1000;
+}
+
+export function isEligibleForMonitor(listing, config, nowMs = Date.now()) {
+  return isListingDueForMonitor(listing, nowMs) && !isTooOldToMonitor(listing, config, nowMs);
 }
 
 export function countMonitorTiers(candidates) {

@@ -84,6 +84,94 @@ export function looksLikeNonIphoneProduct(title, description) {
   return NON_IPHONE_PRODUCT_RE.test(text);
 }
 
+/** Accessory nouns (case, glass, charger, …) — product, not the phone. */
+const ACCESSORY_NOUN_RE =
+  "(?:tempered\\s*glass|screen\\s*protectors?|glass\\s*protectors?|(?:phone\\s+)?cases?|covers?|chargers?|cables?|pouches?|films?|protectors?)";
+
+const MODEL_TOKEN_RE =
+  "(?:iphone|ip)\\s*(?:air(?:\\s*1[7-9])?|se(?:\\s*[23])?|x[rs]?|1[1-7](?:\\s*e)?|[7-9])(?:\\s*(?:pro(?:\\s*max)?|plus|max|mini))?";
+
+/**
+ * Remove bonus / inclusion / negation accessory phrases so "with free case"
+ * does not look like an accessory listing.
+ */
+export function stripBonusAccessoryPhrases(title) {
+  let t = normalizeListingText(title).toLowerCase();
+  if (!t) return "";
+
+  const bonusLead =
+    String.raw`(?:with|free|includes?|including|plus|kasama|bonus|complete(?:\s+with)?|comes?(?:\s+with)?|may\s+kasama|kasama\s+na)`;
+  const negLead = String.raw`(?:no|without|wala(?:\s+ng)?|w\/o)`;
+
+  t = t.replace(
+    new RegExp(
+      String.raw`\b(?:${bonusLead})\s+(?:a\s+|an\s+|the\s+)?(?:free\s+|extra\s+|bonus\s+)?${ACCESSORY_NOUN_RE}\b`,
+      "gi"
+    ),
+    " "
+  );
+  t = t.replace(new RegExp(String.raw`\bw\/\s*(?:free\s+|extra\s+)?${ACCESSORY_NOUN_RE}\b`, "gi"), " ");
+  t = t.replace(
+    new RegExp(String.raw`\b${ACCESSORY_NOUN_RE}\s+included\b`, "gi"),
+    " "
+  );
+  t = t.replace(
+    new RegExp(
+      String.raw`\b(?:and|&)\s+(?:a\s+|an\s+|the\s+)?(?:free\s+|extra\s+|bonus\s+)?${ACCESSORY_NOUN_RE}\b`,
+      "gi"
+    ),
+    " "
+  );
+  t = t.replace(
+    new RegExp(
+      String.raw`\b(?:${negLead})\s+(?:a\s+|an\s+|the\s+)?${ACCESSORY_NOUN_RE}\b`,
+      "gi"
+    ),
+    " "
+  );
+
+  return t.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * True when the title is selling an accessory (case/glass/charger), not a phone.
+ * Keeps real phones that mention bonus accessories ("with case", "free case", "kasama case").
+ */
+export function looksLikeAccessoryListing(title, _description = "") {
+  const raw = normalizeListingText(title).toLowerCase();
+  if (!raw) return false;
+
+  const t = stripBonusAccessoryPhrases(raw);
+  if (!t) return false;
+
+  // "case for iphone 13" / "tempered glass para sa iphone"
+  if (
+    new RegExp(
+      String.raw`\b${ACCESSORY_NOUN_RE}\s+(?:for|para(?:\s+sa)?)\s+${MODEL_TOKEN_RE}\b`,
+      "i"
+    ).test(t)
+  ) {
+    return true;
+  }
+
+  // "case iphone 13" / "tempered glass iphone 13"
+  if (new RegExp(String.raw`\b${ACCESSORY_NOUN_RE}\s+${MODEL_TOKEN_RE}\b`, "i").test(t)) {
+    return true;
+  }
+
+  // "charger only" / "case only"
+  if (new RegExp(String.raw`\b${ACCESSORY_NOUN_RE}\s+only\b`, "i").test(t)) {
+    return true;
+  }
+
+  // "iphone 13 case" / "ip13 pro max tempered glass" — accessory is the product
+  if (new RegExp(String.raw`\b${MODEL_TOKEN_RE}\s+${ACCESSORY_NOUN_RE}\b`, "i").test(t)) {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * @param {object} row
  * @param {object} cfg
@@ -103,6 +191,12 @@ export function shouldSkipAsNoise(row, cfg = {}) {
   if (cfg.discoveryRejectNonIphoneProduct !== false) {
     if (looksLikeNonIphoneProduct(titleRaw, description)) {
       return { skip: true, reason: "non_iphone_product" };
+    }
+  }
+
+  if (cfg.discoveryRejectAccessories !== false) {
+    if (looksLikeAccessoryListing(titleRaw, description)) {
+      return { skip: true, reason: "accessory" };
     }
   }
 

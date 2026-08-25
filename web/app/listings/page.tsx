@@ -6,6 +6,7 @@ import { DealQualityBadge } from "@/components/deal-quality-badge";
 import { BatteryHealthPill, PublicListingChecklist } from "@/components/listing-signal-pills";
 import { ListingRowChevron, ListingRowLink } from "@/components/listing-row-link";
 import { ListingsPageLink, ListingsSortToggle } from "@/components/listings-sort-toggle";
+import { MonitorPausedNote } from "@/components/monitor-paused-note";
 import { LinkPendingBusy, LinkPendingDetailsCue } from "@/components/nav-pending";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { fetchPublicListings } from "@/lib/data";
 import { dealQualityLabel, isLowConfidence, underSimilarListingsCopy } from "@/lib/dealLabels";
 import { formatDateTime, formatPct, formatPhp, formatRelativeAge } from "@/lib/format";
+import { isMonitorPaused } from "@/lib/listingMonitor";
 import { parseRiskFlags } from "@/lib/riskFlags";
 import type { PublicListing } from "@/lib/types";
 import { Flag } from "lucide-react";
@@ -52,6 +54,8 @@ function buildRedFlags(value: unknown): string[] {
   if (flags.dead_unit) warnings.push("Doesn't turn on / dead unit");
   if (flags.water_damage) warnings.push("Water damage");
   if (flags.price_too_low) warnings.push("Tikalon price check");
+  if (flags.price_mismatch) warnings.push("Listing vs description price mismatch");
+  if (flags.price_unverified) warnings.push("Price far below market — unverified");
   if (flags.audio_issue) warnings.push("Audio issue");
   if (flags.face_id_not_working) warnings.push("Face ID not working");
   if (flags.screen_issue) warnings.push("Screen issue detected");
@@ -359,6 +363,9 @@ export default async function Home({
                           </span>
                           <LinkPendingDetailsCue />
                         </div>
+                        {isMonitorPaused(row.posted_at, row.first_seen_at, nowMs) ? (
+                          <MonitorPausedNote compact className="mt-1" />
+                        ) : null}
                       </Link>
                     );
                   })()
@@ -447,6 +454,9 @@ export default async function Home({
                             {formatRelativeAge(row.posted_at || row.first_seen_at, nowMs)}
                           </span>
                           {!row.posted_at ? <span className="ml-2 text-[11px] text-muted-foreground">(est.)</span> : null}
+                          {isMonitorPaused(row.posted_at, row.first_seen_at, nowMs) ? (
+                            <MonitorPausedNote compact className="mt-1 max-w-[11rem] whitespace-normal" />
+                          ) : null}
                         </TableCell>
                         <TableCell className="w-10">
                           <ListingRowChevron />

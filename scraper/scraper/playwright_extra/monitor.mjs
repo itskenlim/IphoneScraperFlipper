@@ -6,7 +6,8 @@ import { createClient } from "@supabase/supabase-js";
 import {
   attachMonitorTier,
   countMonitorTiers,
-  isListingDueForMonitor,
+  isEligibleForMonitor,
+  isTooOldToMonitor,
   readMonitorScheduleConfig
 } from "./monitor_schedule.mjs";
 import {
@@ -104,14 +105,18 @@ async function fetchWatchlistCandidatesLegacy({ limit, supabase }) {
 
   query.order("last_seen_at", { ascending: true, nullsFirst: true });
 
-  const res = await query.limit(Math.max(1, Math.min(limit, 5000)));
+  const pool = Math.max(limit, Math.min(5000, limit * 10));
+  const res = await query.limit(pool);
   if (res.error) throw new Error(`DB watchlist fetch failed: ${res.error.message}`);
-  return dedupeCandidates(res.data || []);
+  const config = readMonitorScheduleConfig();
+  const nowMs = Date.now();
+  return dedupeCandidates(res.data || []).filter((row) => !isTooOldToMonitor(row, config, nowMs));
 }
 
 async function fetchWatchlistCandidatesTiered({ limit, supabase, config, log }) {
   const nowMs = Date.now();
-  const pool = Math.max(limit, Math.min(5000, limit * Math.max(1, config.fetchPoolMultiplier)));
+  // Pull a large due pool so 7-day-old overdue rows don't starve the visit cap.
+  const pool = Math.max(limit, Math.min(5000, Math.max(limit * Math.max(1, config.fetchPoolMultiplier), 2000)));
   const nowIso = new Date(nowMs).toISOString();
 
   const res = await supabase
@@ -136,7 +141,7 @@ async function fetchWatchlistCandidatesTiered({ limit, supabase, config, log }) 
     throw new Error(`DB watchlist fetch failed: ${res.error.message}`);
   }
 
-  const due = dedupeCandidates(res.data || []).filter((row) => isListingDueForMonitor(row, nowMs));
+  const due = dedupeCandidates(res.data || []).filter((row) => isEligibleForMonitor(row, config, nowMs));
   return due.map((row) => attachMonitorTier(row, config, nowMs));
 }
 
@@ -159,7 +164,8 @@ export async function fetchWatchlistCandidates({ limit, log } = {}) {
   if (log && config.scheduler === "tiered") {
     const tiers = countMonitorTiers(selected);
     log(
-      `[INFO] monitor_schedule mode=tiered due_pool=${candidates.length} selected=${selected.length} ` +
+      `[INFO] monitor_schedule mode=tiered max_age_days=${config.maxMonitorAgeDays} ` +
+        `due_pool=${candidates.length} selected=${selected.length} ` +
         `tiers hot=${tiers.hot} warm=${tiers.warm} cold=${tiers.cold}`
     );
   } else if (log) {
@@ -197,6 +203,10 @@ async function recheckOne(page, candidate, opts, index, total) {
   const label = cleanText(opts.label) || "monitor";
   const isMonitor = label === "monitor";
   const enrichOnly = label === "enrich";
+  if (isMonitor && isTooOldToMonitor(candidate, readMonitorScheduleConfig())) {
+    opts.log?.(`[INFO] ${label}_skip listing_id=${listingId} reason=older_than_max_age`);
+    return null;
+  }
   // Discovery enrich should always be allowed to use DOM detail extraction
   // even when monitor is configured as GraphQL-only.
   const graphqlOnly = enrichOnly ? false : monitorGraphqlOnly;

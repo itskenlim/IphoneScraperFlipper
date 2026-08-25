@@ -6,6 +6,10 @@ import { createClient } from "@supabase/supabase-js";
 
 import { loadDotenv } from "../scraper/env.mjs";
 import { detectIssues, buildDebugReasons, hasIcloudRisk, hasForPartsRisk } from "./deal_text.mjs";
+import {
+  extractAskPriceFromDescription,
+  isMateriallyHigherDescAsk
+} from "./desc_price.mjs";
 import { parseStorageGb } from "./parse_storage.mjs";
 
 loadDotenv();
@@ -558,14 +562,47 @@ async function main() {
     const p50 = sampleSize >= 3 ? quantile(iqrPrices, 0.5) : null;
     const p75 = sampleSize >= 3 ? quantile(iqrPrices, 0.75) : null;
 
-    const asking = c.price_php != null && Number.isFinite(c.price_php) ? Number(c.price_php) : null;
-    const hardBlock = !!(
+    const listingAsk =
+      c.price_php != null && Number.isFinite(c.price_php) ? Number(c.price_php) : null;
+    let asking = listingAsk;
+
+    let hardBlock = !!(
       c.risk_flags?.icloud_lock ||
       c.risk_flags?.wanted_post ||
       c.risk_flags?.for_parts ||
       c.risk_flags?.dead_unit ||
-      c.risk_flags?.water_damage
+      c.risk_flags?.water_damage ||
+      c.risk_flags?.price_too_low
     );
+
+    // Comps-gated bait check: only when listing ask is massively under market.
+    const massiveBelowPct = parseBoundEnv("DEALS_MASSIVE_BELOW_PCT", 0.45);
+    if (!hardBlock && listingAsk != null && p50 != null && Number.isFinite(p50) && p50 > 0) {
+      const provisionalBelow = (p50 - listingAsk) / p50;
+      if (provisionalBelow >= massiveBelowPct) {
+        const descAsk = extractAskPriceFromDescription(c.description);
+        if (descAsk != null && isMateriallyHigherDescAsk(descAsk, listingAsk)) {
+          asking = descAsk;
+          c.risk_flags = {
+            ...c.risk_flags,
+            price_mismatch: true,
+            desc_ask_php: descAsk,
+            listing_ask_php: listingAsk
+          };
+          const feat = featuresById.get(c.listing_id);
+          if (feat) feat.risk_flags = c.risk_flags;
+        } else if (descAsk == null) {
+          hardBlock = true;
+          c.risk_flags = {
+            ...c.risk_flags,
+            price_unverified: true
+          };
+          const feat = featuresById.get(c.listing_id);
+          if (feat) feat.risk_flags = c.risk_flags;
+        }
+      }
+    }
+
     const hasCriticalIssue = !!(
       c.risk_flags?.face_id_not_working ||
       c.risk_flags?.screen_issue ||
@@ -624,6 +661,17 @@ async function main() {
       if (c.risk_flags?.dead_unit) addReason("❌ Unit does not turn on / no power");
       if (c.risk_flags?.water_damage) addReason("❌ Water / liquid damage mentioned");
       if (c.risk_flags?.for_parts) addReason("❌ Listed for repair, parts, or technicians");
+      if (c.risk_flags?.price_too_low) addReason("❌ Tikalon price check — ask is too low to trust as a phone deal");
+      if (c.risk_flags?.price_unverified) {
+        addReason("❌ Ask is far below market with no clear selling price in the description");
+      }
+    }
+
+    if (!hardBlock && c.risk_flags?.price_mismatch && c.risk_flags?.desc_ask_php != null) {
+      const listed = c.risk_flags.listing_ask_php ?? listingAsk;
+      addReason(
+        `⚠️ Listing field ₱${formatPhpCompact(listed)} vs description ask ₱${formatPhpCompact(c.risk_flags.desc_ask_php)} — scored using description ask`
+      );
     }
 
     if (!hardBlock && belowMarketPct != null) {
@@ -650,11 +698,9 @@ async function main() {
 
       if (lowConfidenceComps) addReason(`⚠️ Low confidence comps (n=${sampleSize}, score capped to C)`);
       if (noDesc) addReason("⚠️ No/short description (unknown condition, score capped to C)");
-      if (c.risk_flags?.price_too_low) addReason("⚠️ Tikalon price check");
     } else {
       if (!hardBlock && lowConfidenceComps) addReason(`⚠️ Low confidence comps (n=${sampleSize})`);
       if (!hardBlock && noDesc) addReason("⚠️ No/short description (unknown condition)");
-      if (!hardBlock && c.risk_flags?.price_too_low) addReason("⚠️ Tikalon price check");
     }
 
     if (!hardBlock && riskCost > 0) {
@@ -674,7 +720,6 @@ async function main() {
     if (c.risk_flags?.battery_replaced) addReason("⚠️ Battery replaced");
     if (c.risk_flags?.button_issue) addReason("⚠️ Button issue (volume/power)");
     if (c.risk_flags?.audio_issue) addReason("⚠️ Audio issue (mic/speaker)");
-    if (c.risk_flags?.price_too_low) addReason("⚠️ Tikalon price check");
 
     addReason(`Confidence: ${confidence} (n=${sampleSize} comps)`);
 
