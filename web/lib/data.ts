@@ -1,3 +1,4 @@
+import { isWithinMonitorWindow } from "@/lib/listingMonitor";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import type { ListingVersion, PrivateListing, PublicListing } from "@/lib/types";
 
@@ -161,7 +162,10 @@ export async function fetchPublicListings(input: PublicListingsQuery) {
     const res = await dealsQuery.range(0, dealsCap - 1);
     if (res.error) throw new Error(res.error.message);
 
-    const mapped = ((res.data || []) as unknown as any[]).map(mapPublicListingRow);
+    const nowMs = Date.now();
+    const mapped = ((res.data || []) as unknown as any[])
+      .map(mapPublicListingRow)
+      .filter((row) => isWithinMonitorWindow(row.posted_at, row.first_seen_at, row.deal_score, nowMs));
     const sorted = [...mapped].sort(compareBestDeals);
     const total = sorted.length;
     const items = sorted.slice(from, from + pageSize);

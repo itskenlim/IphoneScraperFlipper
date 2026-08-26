@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { fetchPublicListings } from "@/lib/data";
 import { dealQualityLabel, isLowConfidence, underSimilarListingsCopy } from "@/lib/dealLabels";
 import { formatDateTime, formatPct, formatPhp, formatRelativeAge } from "@/lib/format";
-import { isMonitorPaused } from "@/lib/listingMonitor";
+import { isMonitorPaused, isWithinMonitorWindow } from "@/lib/listingMonitor";
 import { parseRiskFlags } from "@/lib/riskFlags";
 import type { PublicListing } from "@/lib/types";
 import { Flag } from "lucide-react";
@@ -103,9 +103,10 @@ function ListingDealSignals({
   );
 }
 
-function showDeal(row: PublicListing) {
+function showDeal(row: PublicListing, nowMs: number = Date.now()) {
   const s = String(row.deal_score || "").toUpperCase();
-  return s === "A" || s === "B" || s === "C";
+  if (!(s === "A" || s === "B" || s === "C")) return false;
+  return isWithinMonitorWindow(row.posted_at, row.first_seen_at, row.deal_score, nowMs);
 }
 
 function buildHref(params: Record<string, string>, overrides: Partial<Record<string, string>>) {
@@ -166,7 +167,7 @@ export default async function Home({
       .map((v) => new Date(String(v)).getTime())
       .filter((ms) => Number.isFinite(ms))
       .sort((a, b) => b - a)[0] || null;
-  const hasDeals = filteredItems.some((row) => showDeal(row));
+  const hasDeals = filteredItems.some((row) => showDeal(row, nowMs));
   const showDealColumn = sortMode === "deals" || hasDeals;
   const sortLabel = sortMode === "deals" ? "best deals" : "latest";
 
@@ -285,7 +286,7 @@ export default async function Home({
               <div className="space-y-3 sm:hidden">
                 {filteredItems.map((row: PublicListing) => (
                   (() => {
-                    const dealVisible = showDeal(row);
+                    const dealVisible = showDeal(row, nowMs);
                     const dealSignals = dealVisible ? (
                       <ListingDealSignals
                         dealScore={row.deal_score}
@@ -363,8 +364,8 @@ export default async function Home({
                           </span>
                           <LinkPendingDetailsCue />
                         </div>
-                        {isMonitorPaused(row.posted_at, row.first_seen_at, nowMs) ? (
-                          <MonitorPausedNote compact className="mt-1" />
+                        {isMonitorPaused(row.posted_at, row.first_seen_at, row.deal_score, nowMs) ? (
+                          <MonitorPausedNote compact className="mt-1" dealScore={row.deal_score} />
                         ) : null}
                       </Link>
                     );
@@ -390,7 +391,7 @@ export default async function Home({
                   <TableBody>
                     {filteredItems.map((row: PublicListing) => (
                       (() => {
-                        const dealVisible = showDeal(row);
+                        const dealVisible = showDeal(row, nowMs);
                         const dealSignals = dealVisible ? (
                           <ListingDealSignals
                             dealScore={row.deal_score}
@@ -454,8 +455,12 @@ export default async function Home({
                             {formatRelativeAge(row.posted_at || row.first_seen_at, nowMs)}
                           </span>
                           {!row.posted_at ? <span className="ml-2 text-[11px] text-muted-foreground">(est.)</span> : null}
-                          {isMonitorPaused(row.posted_at, row.first_seen_at, nowMs) ? (
-                            <MonitorPausedNote compact className="mt-1 max-w-[11rem] whitespace-normal" />
+                          {isMonitorPaused(row.posted_at, row.first_seen_at, row.deal_score, nowMs) ? (
+                            <MonitorPausedNote
+                              compact
+                              className="mt-1 max-w-[11rem] whitespace-normal"
+                              dealScore={row.deal_score}
+                            />
                           ) : null}
                         </TableCell>
                         <TableCell className="w-10">

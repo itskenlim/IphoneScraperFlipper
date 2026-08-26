@@ -20,8 +20,10 @@ export function readMonitorScheduleConfig() {
     coldIntervalHours: envInt("PLAYWRIGHT_MONITOR_COLD_INTERVAL_HOURS", 168),
     priceChangeHotHours: envInt("PLAYWRIGHT_MONITOR_PRICE_CHANGE_HOT_HOURS", 48),
     coldStalePriceDays: envInt("PLAYWRIGHT_MONITOR_COLD_STALE_PRICE_DAYS", 7),
-    /** Stop visiting listings older than this (comps still use last-known prices). */
+    /** Stop visiting non-deal listings older than this (comps still use last-known prices). */
     maxMonitorAgeDays: envInt("PLAYWRIGHT_MONITOR_MAX_AGE_DAYS", 7),
+    /** A/B/C deals stay on the monitor queue longer so Best deals stay fresh. */
+    maxDealMonitorAgeDays: envInt("PLAYWRIGHT_MONITOR_DEAL_MAX_AGE_DAYS", 14),
     failLockoutBaseMinutes: envInt("PLAYWRIGHT_MONITOR_FAIL_LOCKOUT_BASE_MINUTES", 5),
     failLockoutMaxMinutes: envInt("PLAYWRIGHT_MONITOR_FAIL_LOCKOUT_MAX_MINUTES", 120),
     fetchPoolMultiplier: envInt("PLAYWRIGHT_MONITOR_FETCH_POOL_MULTIPLIER", 3)
@@ -52,6 +54,17 @@ export function normalizeDealScore(dealScore) {
   return null;
 }
 
+/** Resolve deal score from a flat field or nested `deal` / `deal_metrics` join. */
+export function dealScoreFromListing(listing) {
+  if (!listing || typeof listing !== "object") return null;
+  const direct = normalizeDealScore(listing.deal_score);
+  if (direct) return direct;
+  const deal = listing.deal ?? listing.deal_metrics;
+  if (Array.isArray(deal)) return normalizeDealScore(deal[0]?.deal_score);
+  if (deal && typeof deal === "object") return normalizeDealScore(deal.deal_score);
+  return null;
+}
+
 /**
  * Classify an active listing for monitor cadence.
  * hot  — new, strong deal score, or recent price movement
@@ -59,7 +72,7 @@ export function normalizeDealScore(dealScore) {
  * cold — old, weak score, stale price (flipper tail)
  */
 export function computeMonitorTier(listing, dealScore, config, nowMs = Date.now()) {
-  const score = normalizeDealScore(dealScore);
+  const score = normalizeDealScore(dealScore) ?? dealScoreFromListing(listing);
   const ageMs = listingAgeMs(listing, nowMs);
   const ageDays = ageMs == null ? null : ageMs / (24 * 60 * 60 * 1000);
 
@@ -122,9 +135,18 @@ export function isListingDueForMonitor(listing, nowMs = Date.now()) {
   return nextMs <= nowMs;
 }
 
-/** True when the listing is past the monitor age cap (posted/first seen). */
+/** Age cap for this listing: deals (A/B/C) use the longer deal window. */
+export function maxMonitorAgeDaysForListing(listing, config) {
+  const score = dealScoreFromListing(listing);
+  const baseMax = Math.max(1, config?.maxMonitorAgeDays ?? 7);
+  const dealMax = Math.max(baseMax, config?.maxDealMonitorAgeDays ?? 14);
+  if (score === "A" || score === "B" || score === "C") return dealMax;
+  return baseMax;
+}
+
+/** True when the listing is past its monitor age cap (posted/first seen). */
 export function isTooOldToMonitor(listing, config, nowMs = Date.now()) {
-  const maxDays = Math.max(1, config?.maxMonitorAgeDays ?? 7);
+  const maxDays = maxMonitorAgeDaysForListing(listing, config);
   const ageMs = listingAgeMs(listing, nowMs);
   if (ageMs == null) return false;
   return ageMs > maxDays * 24 * 60 * 60 * 1000;
@@ -145,7 +167,7 @@ export function countMonitorTiers(candidates) {
 }
 
 export function attachMonitorTier(candidate, config, nowMs = Date.now()) {
-  const dealScore = candidate?.deal_score ?? candidate?.deal?.deal_score ?? null;
+  const dealScore = dealScoreFromListing(candidate);
   const tier = computeMonitorTier(candidate, dealScore, config, nowMs);
   return { ...candidate, deal_score: dealScore, _monitor_tier: tier };
 }

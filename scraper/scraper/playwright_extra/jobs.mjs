@@ -100,6 +100,40 @@ function mergeEnrichedRow(baseRow, enrichedRow, counters) {
     changed = true;
   }
 
+  // Copy GraphQL-derived fields from enrich/monitor when discovery feed/DOM lacked them.
+  const graphqlKeys = [
+    "listing_seller_id",
+    "listing_seller_name",
+    "listing_category_name",
+    "listing_leaf_category_name",
+    "listing_taxonomy_name",
+    "listing_location_city",
+    "listing_location_state",
+    "listing_price_amount",
+    "listing_price_formatted",
+    "listing_strikethrough_price",
+    "listing_is_live",
+    "listing_is_sold",
+    "listing_is_pending",
+    "listing_is_hidden"
+  ];
+  for (const key of graphqlKeys) {
+    const incoming = enrichedRow[key];
+    const have =
+      key.startsWith("listing_is_")
+        ? typeof merged[key] === "boolean"
+        : cleanText(merged[key]) != null || (typeof merged[key] === "number" && Number.isFinite(merged[key]));
+    const ok =
+      key.startsWith("listing_is_")
+        ? typeof incoming === "boolean"
+        : cleanText(incoming) != null || (typeof incoming === "number" && Number.isFinite(incoming));
+    if (!have && ok) {
+      merged[key] = incoming;
+      changed = true;
+      counters.graphqlFilled = (counters.graphqlFilled || 0) + 1;
+    }
+  }
+
   if (changed) counters.merged += 1;
   return merged;
 }

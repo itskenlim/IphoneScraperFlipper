@@ -31,7 +31,9 @@ Classification uses **listing age**, **`deal_metrics.deal_score`**, and **`last_
 | **warm** | Age 3–7d, score **C**, or older but still moving | 24 hours |
 | **cold** | Age > 7d, score **D/NA/missing**, price unchanged ≥ 7d | not visited (age cap) |
 
-Listings older than **7 days** (`PLAYWRIGHT_MONITOR_MAX_AGE_DAYS`) are **not selected** for monitor, even if `monitor_next_check_at` is due. Last-known prices still feed **~30-day comps**. The UI notes that those listings are no longer monitored.
+Listings older than **7 days** (`PLAYWRIGHT_MONITOR_MAX_AGE_DAYS`) are **not selected** for monitor, **unless** they have deal score **A/B/C** — those stay eligible until **14 days** (`PLAYWRIGHT_MONITOR_DEAL_MAX_AGE_DAYS`). Last-known prices still feed **~30-day comps**.
+
+**Best deals / live strip** only show listings still inside that same window (≤7d normal, ≤14d for A/B/C), so stale unmonitored deals do not linger.
 
 ### Failure backoff
 
@@ -70,6 +72,7 @@ PLAYWRIGHT_MONITOR_COLD_INTERVAL_HOURS=168
 PLAYWRIGHT_MONITOR_PRICE_CHANGE_HOT_HOURS=48
 PLAYWRIGHT_MONITOR_COLD_STALE_PRICE_DAYS=7
 PLAYWRIGHT_MONITOR_MAX_AGE_DAYS=7
+PLAYWRIGHT_MONITOR_DEAL_MAX_AGE_DAYS=14
 PLAYWRIGHT_MONITOR_FAIL_LOCKOUT_BASE_MINUTES=5
 PLAYWRIGHT_MONITOR_FAIL_LOCKOUT_MAX_MINUTES=120
 PLAYWRIGHT_MONITOR_FETCH_POOL_MULTIPLIER=3

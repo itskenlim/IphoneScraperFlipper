@@ -169,8 +169,8 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
                 {!listing.posted_at ? " (est.)" : ""}
               </span>
             </div>
-            {isMonitorPaused(listing.posted_at, listing.first_seen_at) ? (
-              <MonitorPausedNote className="mt-2" />
+            {isMonitorPaused(listing.posted_at, listing.first_seen_at, listing.deal_score) ? (
+              <MonitorPausedNote className="mt-2" dealScore={listing.deal_score} />
             ) : null}
           </div>
 

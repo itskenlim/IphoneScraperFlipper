@@ -339,14 +339,21 @@ function normalizeNetworkListing(node) {
     }
   }
 
+  const sellerObj =
+    (listing.marketplace_listing_seller && typeof listing.marketplace_listing_seller === "object"
+      ? listing.marketplace_listing_seller
+      : null) ||
+    (listing.seller && typeof listing.seller === "object" ? listing.seller : null) ||
+    null;
   const sellerId =
-    listing.marketplace_listing_seller?.id ||
-    listing.seller?.id ||
+    sellerObj?.id ||
     listing.seller_id ||
+    listing.marketplace_listing_seller_id ||
     null;
   const sellerName =
-    pickText(listing.marketplace_listing_seller?.name) ||
-    pickText(listing.seller?.name) ||
+    pickText(sellerObj?.name) ||
+    pickText(sellerObj?.short_name) ||
+    pickText(sellerObj?.username) ||
     pickText(listing.seller_name) ||
     null;
 
@@ -935,7 +942,13 @@ export async function extractDiscoveryRows(page, opts) {
         seenInRun
       });
       dupListingIdsSkipped += dom.dupListingIdsSkipped;
-      for (const row of dom.rows) merged.set(String(row.listing_id), row);
+      for (const row of dom.rows) {
+        const id = String(row.listing_id || "");
+        if (!id) continue;
+        // Never replace a GraphQL network row with a DOM stub (would wipe seller/category fields).
+        if (merged.has(id)) continue;
+        merged.set(id, row);
+      }
       if (logEnabled) log(`[INFO] data_fallback=dom_topup added=${dom.rows.length} total=${merged.size}`);
     }
 

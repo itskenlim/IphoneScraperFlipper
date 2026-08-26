@@ -88,6 +88,28 @@ describe("monitor_schedule", () => {
     );
   });
 
+  it("keeps A/B/C deals monitorable longer than the base age cap", () => {
+    // 10 days old — past base 7d, within deal 14d
+    const tenDaysOld = { posted_at: "2026-07-02T12:00:00.000Z", deal_score: "A" };
+    assert.equal(isTooOldToMonitor(tenDaysOld, config, now), false);
+    assert.equal(isEligibleForMonitor({ ...tenDaysOld, monitor_next_check_at: "2026-07-12T11:00:00.000Z" }, config, now), true);
+
+    // Nested deal join from Supabase
+    assert.equal(
+      isTooOldToMonitor({ posted_at: "2026-07-02T12:00:00.000Z", deal: { deal_score: "C" } }, config, now),
+      false
+    );
+
+    // 10 days old, no deal — past base 7d
+    assert.equal(isTooOldToMonitor({ posted_at: "2026-07-02T12:00:00.000Z" }, config, now), true);
+
+    // 16 days old deal — past deal 14d
+    assert.equal(
+      isTooOldToMonitor({ posted_at: "2026-06-26T12:00:00.000Z", deal_score: "B" }, config, now),
+      true
+    );
+  });
+
   it("due listings past max age are not eligible", () => {
     const oldDue = {
       posted_at: "2026-06-01T00:00:00.000Z",
