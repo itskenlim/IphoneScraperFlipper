@@ -13,6 +13,7 @@ import {
   inferLocation,
   inferTitle,
   makeAbsoluteFacebookUrl,
+  normalizeListingDescription,
   parsePhpPrice,
   sanitizeTitle,
   sleep
@@ -232,14 +233,16 @@ function normalizeNetworkListing(node) {
     pickText(node.title_with_entities) ||
     null;
   const description =
-    pickText(listing.marketplace_listing_description) ||
-    pickText(listing.marketplace_description) ||
-    pickText(listing.description) ||
-    pickText(listing.description_with_entities) ||
-    pickText(listing.description_text) ||
-    pickText(node.marketplace_listing_description) ||
-    pickText(node.description) ||
-    null;
+    normalizeListingDescription(
+      pickText(listing.marketplace_listing_description) ||
+        pickText(listing.marketplace_description) ||
+        pickText(listing.description) ||
+        pickText(listing.description_with_entities) ||
+        pickText(listing.description_text) ||
+        pickText(node.marketplace_listing_description) ||
+        pickText(node.description) ||
+        null
+    );
   const toNumber = (value) => {
     if (value == null) return null;
     const n = Number.parseFloat(String(value).replace(/,/g, ""));
@@ -536,7 +539,9 @@ async function extractFromDom(page, { maxCards, scrollPages, scrollDelayMs, runI
     const priceRaw = extractPrice(raw.cardText) || extractBestPhpPriceRaw(raw.cardText);
     const pricePhp = parsePhpPrice(priceRaw);
     const locationRaw = inferLocation(raw.cardText);
-    const description = inferDescription(raw.cardText, title, priceRaw);
+    const description = normalizeListingDescription(
+      inferDescription(raw.cardText, title, priceRaw)
+    );
     const postedAt = inferPostedAtFromBodyText(raw.cardText, scrapedAt);
     if (logEnabled) {
       log(

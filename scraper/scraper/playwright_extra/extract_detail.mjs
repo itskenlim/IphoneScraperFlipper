@@ -7,6 +7,7 @@ import {
   inferLocation,
   isPriceOnly,
   isWeakDescription,
+  normalizeListingDescription,
   shouldPreferDescription
 } from "./utils.mjs";
 
@@ -76,7 +77,7 @@ function normalizeDetailDescription(value) {
   if (parts[0] && /^(used|new)\s*-\s*/i.test(parts[0])) parts.shift();
 
   const joined = cleanText(parts.join(" | "));
-  return joined || null;
+  return normalizeListingDescription(joined) || joined || null;
 }
 
 function pickPrimaryPriceRaw(texts) {
@@ -388,7 +389,7 @@ export async function extractDetailFieldsFromPage(page, record) {
 
 export function deriveDescriptionFromDetail({ bodyText, metaOgDescription, title, priceRaw, detailDescription }) {
   const ctx = { title, priceRaw };
-  const detail = cleanText(detailDescription);
+  const detail = normalizeListingDescription(detailDescription) || cleanText(detailDescription);
   if (detail && !isWeakDescription(detail) && isAcceptableListingDescription(detail, ctx)) return detail;
 
   const bodyLines = String(bodyText || "")
@@ -405,7 +406,8 @@ export function deriveDescriptionFromDetail({ bodyText, metaOgDescription, title
   const fromBodyLongest = pickLongestSellerText(scopedBody, { title, priceRaw });
   let fromBody = null;
   for (const candidate of [fromBodyJoined, fromBodyLongest]) {
-    if (preferDescriptionCandidate(candidate, fromBody, ctx)) fromBody = candidate;
+    const normalized = normalizeListingDescription(candidate) || cleanText(candidate);
+    if (preferDescriptionCandidate(normalized, fromBody, ctx)) fromBody = normalized;
   }
   if (fromBody && !isWeakDescription(fromBody) && isAcceptableListingDescription(fromBody, ctx)) {
     return fromBody;
@@ -416,7 +418,9 @@ export function deriveDescriptionFromDetail({ bodyText, metaOgDescription, title
   if (fromBody && isAcceptableListingDescription(fromBody, ctx)) return fromBody;
 
   const fallback = inferDescription(scopedBody.join("\n") || metaOgDescription || "", title, priceRaw);
-  if (fallback && isAcceptableListingDescription(fallback, ctx)) return cleanText(fallback);
+  if (fallback && isAcceptableListingDescription(fallback, ctx)) {
+    return normalizeListingDescription(fallback) || cleanText(fallback);
+  }
   return null;
 }
 

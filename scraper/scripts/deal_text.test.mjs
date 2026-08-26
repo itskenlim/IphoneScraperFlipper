@@ -216,6 +216,26 @@ test("no blur cam should not flag camera issue", () => {
   );
 });
 
+test("hairline crack on camera lens flags camera_issue", () => {
+  const issues = detectIssues("HAIRLINE CRACK SA X3 CAMERA LENS");
+  assert.equal(issues.camera_issue, true);
+});
+
+test("unstabilized / ga shake camera flags camera_issue", () => {
+  const issues = detectIssues(
+    "NAG UNSTABILIZED ANG X3 CAMERA — GA SHAKE OCCASIONALLY PERO MAKA TAKE PA MAN DECENT PHOTO"
+  );
+  assert.equal(issues.camera_issue, true);
+});
+
+test("smart-lock listing with cracked shaking camera flags both network and camera", () => {
+  const text =
+    "For sale IPHONE 13 PROMAX ₱17,500 128GB 77BH Smart-locked Original all parts ISSUE‼️ HAIRLINE CRACK SA X3 CAMERA LENS AND NAG UNSTABILIZED ANG X3 CAMERA — GA SHAKE OCCASIONALLY PERO MAKA TAKE PA MAN DECENT PHOTO. Other than that all goods na and smooth. Unit with case and charger only // NO BOX!";
+  const issues = detectIssues(text);
+  assert.equal(issues.network_locked, true);
+  assert.equal(issues.camera_issue, true);
+});
+
 test("battery mention with lcd replacement does not flag battery replaced", () => {
   const issues = detectIssues("80 percent battery health newly replaced lcd oled");
   assert.deepEqual(

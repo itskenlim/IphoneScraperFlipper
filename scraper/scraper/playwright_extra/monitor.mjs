@@ -39,6 +39,7 @@ import {
   randomBetween,
   sanitizeTitle,
   shouldPreferDescription,
+  normalizeListingDescription,
   sleep
 } from "./utils.mjs";
 
@@ -545,6 +546,7 @@ async function recheckOne(page, candidate, opts, index, total) {
         }
       }
     }
+    safeDescription = normalizeListingDescription(safeDescription) ?? cleanText(safeDescription);
 
     const descSource = !useDomForDesc
       ? "keep"

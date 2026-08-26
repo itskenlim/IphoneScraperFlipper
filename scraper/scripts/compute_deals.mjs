@@ -73,6 +73,43 @@ function hasModificationLanguage(text) {
   );
 }
 
+/**
+ * Remove "want / preferred / swap for" model mentions so we score the unit for sale,
+ * not the phone the seller hopes to receive.
+ */
+export function stripSwapPreferenceMentions(text) {
+  let s = String(text || "");
+  if (!s) return "";
+
+  const modelTok =
+    String.raw`(?:iphone|ip)\s*(?:air(?:\s*1[7-9])?|se(?:\s*[23])?|x[rs]?|1[1-7](?:\s*e)?|[7-9])(?:\s*(?:pro(?:\s*max)?|plus|max|mini))?`;
+
+  // (prefered iphone 15) / (swap sa IP16)
+  s = s.replace(
+    new RegExp(String.raw`\([^)]*\b(?:preferr?ed?|prefer|looking\s+for|want|gusto|swap|trade|palit)[^)]*\)`, "gi"),
+    " "
+  );
+  // preferred / looking for / want + model
+  s = s.replace(
+    new RegExp(
+      String.raw`\b(?:preferr?ed?|prefer|looking\s+for|want(?:ing)?|gusto(?:\s+ko)?(?:\s+ng)?|need)\s*(?:an?\s+|ng\s+)?${modelTok}\b`,
+      "gi"
+    ),
+    " "
+  );
+  // swap/trade/palit sa|for|to model — connector required so "FOR SALE OR SWAP\niPhone 13"
+  // does not eat the unit for sale after a bare "swap".
+  s = s.replace(
+    new RegExp(
+      String.raw`\b(?:swap|trade|palit)\s+(?:sa|for|to|with|into|ng)\s*(?:an?\s+|ng\s+)?${modelTok}\b`,
+      "gi"
+    ),
+    " "
+  );
+
+  return s.replace(/\s+/g, " ").trim();
+}
+
 function collectModelFamilies(text) {
   const s = String(text || "").toLowerCase();
   if (!s) return [];
@@ -112,7 +149,7 @@ function collectModelFamilies(text) {
 }
 
 export function parseModelFamily(text) {
-  const s = String(text || "").toLowerCase();
+  const s = stripSwapPreferenceMentions(String(text || "").toLowerCase());
   if (!s) return null;
 
   const models = collectModelFamilies(s);

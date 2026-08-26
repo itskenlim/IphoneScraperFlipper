@@ -14,6 +14,58 @@ export function cleanText(value) {
   return cleaned || null;
 }
 
+/**
+ * Strip Facebook "See less/more" chrome and repeated description segments
+ * (common when DOM scrape concatenates collapsed + expanded text).
+ */
+export function normalizeListingDescription(value) {
+  let s = cleanText(value);
+  if (!s) return null;
+
+  s = s
+    .replace(/\bsee\s+(?:less|more)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!s) return null;
+
+  const parts = s
+    .split(/\s*\|\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    const kept = [];
+    for (const part of parts) {
+      const norm = part.toLowerCase().replace(/\s+/g, " ");
+      if (!norm) continue;
+      const dup = kept.some((k) => {
+        const kn = k.toLowerCase().replace(/\s+/g, " ");
+        if (kn === norm) return true;
+        // Near-duplicate: one segment contains the other (≥70% length).
+        const shorter = kn.length <= norm.length ? kn : norm;
+        const longer = kn.length > norm.length ? kn : norm;
+        return shorter.length >= 40 && longer.includes(shorter) && shorter.length / longer.length >= 0.7;
+      });
+      if (!dup) kept.push(part);
+    }
+    s = kept.join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  // Whole-string half duplicate without pipes.
+  if (s.length >= 100) {
+    const mid = Math.floor(s.length / 2);
+    const left = s.slice(0, mid).trim();
+    const right = s.slice(mid).trim();
+    const ln = left.toLowerCase().replace(/\s+/g, " ");
+    const rn = right.toLowerCase().replace(/\s+/g, " ");
+    if (ln.length >= 40 && rn.length >= 40) {
+      const prefix = ln.slice(0, Math.min(80, ln.length));
+      if (rn.startsWith(prefix) || ln === rn) s = left;
+    }
+  }
+
+  return cleanText(s);
+}
+
 export function stripEmoji(value) {
   const cleaned = cleanText(value);
   if (!cleaned) return null;
@@ -407,8 +459,8 @@ export function isWeakDescription(value) {
 
 /** Prefer next description when it is stronger than prev (empty/weak → real, or much longer). */
 export function shouldPreferDescription(next, prev) {
-  const n = cleanText(next);
-  const p = cleanText(prev);
+  const n = normalizeListingDescription(next) || cleanText(next);
+  const p = normalizeListingDescription(prev) || cleanText(prev);
   if (!n) return false;
   if (!p || isWeakDescription(p)) {
     if (!isWeakDescription(n)) return true;

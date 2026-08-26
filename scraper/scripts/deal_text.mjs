@@ -2,7 +2,16 @@ const ISSUE_LINE_RE = /^\s*issue\s*[:\-]/i;
 
 const NETWORK_ALIASES = ["network signal", "data signal", "signal", "network"];
 
-const CAMERA_ALIASES = ["camera", "back cam", "rear cam", "front cam", "cam"];
+const CAMERA_ALIASES = [
+  "camera",
+  "back cam",
+  "rear cam",
+  "front cam",
+  "cam",
+  "lens",
+  "x3 camera",
+  "telephoto"
+];
 
 const SCREEN_ALIASES = ["screen", "display", "lcd"];
 
@@ -114,11 +123,33 @@ const FEATURE_RULES = {
     allowFallbackWorking: true
   },
   camera: {
-    sequences: [["camera"], ["back", "cam"], ["rear", "cam"], ["front", "cam"]],
-    singles: ["camera", "cam"],
-    collapsed: ["camera", "backcam", "rearcam", "frontcam", "cam"],
-    positives: ["working", "ok", "okay", "clear", "good"],
-    negatives: ["issue", "problem", "broken", "defect", "dead", "blur", "blurd", "blurry", "blurred", "fog", "nocamera", "notworking", "notwork"],
+    sequences: [["camera"], ["back", "cam"], ["rear", "cam"], ["front", "cam"], ["camera", "lens"]],
+    singles: ["camera", "cam", "lens"],
+    collapsed: ["camera", "backcam", "rearcam", "frontcam", "cam", "cameralens", "lens"],
+    positives: ["working", "ok", "okay", "clear"],
+    // Prefer explicit optics/OIS issues; "good" removed (matches "all goods" near camera).
+    negatives: [
+      "issue",
+      "problem",
+      "broken",
+      "defect",
+      "dead",
+      "blur",
+      "blurd",
+      "blurry",
+      "blurred",
+      "fog",
+      "crack",
+      "cracked",
+      "hairline",
+      "shake",
+      "shaking",
+      "unstabilized",
+      "unstable",
+      "nocamera",
+      "notworking",
+      "notwork"
+    ],
     allowFallbackWorking: false
   },
   screen: {
@@ -542,14 +573,33 @@ export function detectIssues(text) {
     /\b(0\.5x?|0\.5|ultra\s*wide|ultrawide|wide\s*angle)\b/i.test(views.lower) &&
     /\b(blur|blurd|blurry|blurred|ga\s*blurd|ga\s*blur)\b/i.test(views.lower);
 
+  // Bidirectional: "hairline crack sa x3 camera lens" / "camera lens crack"
+  const cameraCrack =
+    /\b(hairline\s*)?(crack|cracked|basag)\b[^\n]{0,32}\b(cam|camera|lens|tele(?:photo)?|x3)\b/i.test(
+      views.lower
+    ) ||
+    /\b(cam|camera|lens|tele(?:photo)?|x3)\b[^\n]{0,32}\b(hairline\s*)?(crack|cracked|basag)\b/i.test(
+      views.lower
+    );
+
+  // OIS / shake: "nag unstabilized ang x3 camera — ga shake"
+  const cameraShake =
+    /\b(cam|camera|lens|tele(?:photo)?|x3|ois)\b/i.test(views.lower) &&
+    /\b(shake|shaking|ga\s*shake|unstabili[sz]e[sd]?|unstable|no\s*ois|ois\s*(?:issue|problem|broken|guba)|stabilizer\s*(?:issue|problem|broken|guba|dead))\b/i.test(
+      views.lower
+    );
+
   const cameraNoBlur =
     /\bno\s+(blur|blurd|blurry|blurred)\b/i.test(views.lower) &&
     /\b(cam|camera|back\s*cam|rear\s*cam|front\s*cam)\b/i.test(views.lower);
   const cameraHardNeg =
-    /\b(issue|problem|broken|defect|dead|nocamera|not\s*work(?:ing)?|notwork)\b/i.test(views.lower);
+    /\b(issue|problem|broken|defect|dead|nocamera|not\s*work(?:ing)?|notwork|crack|cracked|shake|shaking|unstabili[sz]e[sd]?)\b/i.test(
+      views.lower
+    );
 
-  let cameraNegative = camera.negative || issueHits.camera || wideBlur;
-  if (cameraNoBlur && !cameraHardNeg) {
+  let cameraNegative =
+    camera.negative || issueHits.camera || wideBlur || cameraCrack || cameraShake;
+  if (cameraNoBlur && !cameraHardNeg && !cameraCrack && !cameraShake) {
     cameraNegative = false;
   }
 

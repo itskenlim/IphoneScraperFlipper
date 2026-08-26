@@ -4,7 +4,7 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
 import { isAcceptableListingDescription, looksLikeForeignListingDescription } from "./extract_detail.mjs";
-import { cleanText, envBool, envInt, isPlaceholderTitle, isWeakDescription, normalizeLocationRaw, parsePhpPrice, shouldPreferDescription } from "./utils.mjs";
+import { cleanText, envBool, envInt, isPlaceholderTitle, isWeakDescription, normalizeListingDescription, normalizeLocationRaw, parsePhpPrice, shouldPreferDescription } from "./utils.mjs";
 import {
   computeFailureLockout,
   computeNextCheckAt,
@@ -237,7 +237,7 @@ export async function persistToDatabase(rows, { log, phase } = {}) {
     const changedFields = [];
 
     let nextTitle = row.title;
-    let nextDescription = row.description;
+    let nextDescription = normalizeListingDescription(row.description) ?? cleanText(row.description);
     let nextConditionRaw = cleanText(row.condition_raw);
     let nextLocationRaw = normalizeLocationRaw(row.location_raw);
     let nextPriceRaw = row.price_raw;
@@ -332,6 +332,7 @@ export async function persistToDatabase(rows, { log, phase } = {}) {
       } else if (cleanText(existing.description) && isWeakDescription(nextDescription) && existingOk) {
         nextDescription = existing.description;
       }
+      nextDescription = normalizeListingDescription(nextDescription) ?? cleanText(nextDescription);
 
       if (isPlaceholderTitle(nextTitle) && !isPlaceholderTitle(existing.title)) {
         nextTitle = existing.title;

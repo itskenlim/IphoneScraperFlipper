@@ -27,6 +27,14 @@ test("two numbered models without mod keep first-match numbered behavior", () =>
   assert.equal(parseModelFamily("sale IP11 or swap sa IP15"), "iphone_11");
 });
 
+test("preferred swap target in title does not override unit for sale in description", () => {
+  const text =
+    "FOR SALE OR SWAP (prefered iphone 15)\nIphone 13, 128GB Starlight Details: Under Warranty pa ZPA variant";
+  assert.equal(parseModelFamily(text), "iphone_13");
+  assert.equal(parseModelFamily("FOR SALE OR SWAP (preferred iPhone 16)\nSelling iPhone 12 64gb"), "iphone_12");
+  assert.equal(parseModelFamily("iPhone 14 128 openline willing swap sa iPhone 15 Pro"), "iphone_14");
+});
+
 test("single modern model unchanged", () => {
   assert.equal(parseModelFamily("iPhone 15 128gb Face ID working"), "iphone_15");
 });
