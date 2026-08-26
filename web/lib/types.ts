@@ -21,6 +21,10 @@ export type PublicListing = {
   confidence?: DealConfidence | null;
   est_profit_php?: number | null;
   risk_flags?: unknown;
+
+  seller_id?: string | null;
+  seller_name?: string | null;
+  seller_active_count?: number | null;
 };
 
 export type PrivateListing = PublicListing & {

@@ -1,4 +1,8 @@
 import { isWithinMonitorWindow } from "@/lib/listingMonitor";
+import {
+  attachSellerActiveCounts,
+  countActiveBySellerId
+} from "@/lib/sellerDisplay";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import type { ListingVersion, PrivateListing, PublicListing } from "@/lib/types";
 
@@ -93,7 +97,10 @@ function mapPublicListingRow(r: any): PublicListing {
     below_market_pct: deal?.below_market_pct ?? null,
     confidence: deal?.confidence ?? null,
     est_profit_php: deal?.est_profit_php ?? null,
-    risk_flags: feat?.risk_flags ?? null
+    risk_flags: feat?.risk_flags ?? null,
+    seller_id: cleanText(r.listing_seller_id),
+    seller_name: cleanText(r.listing_seller_name),
+    seller_active_count: null
   };
 }
 
@@ -123,6 +130,25 @@ export function compareBestDeals(a: PublicListing, b: PublicListing) {
   return String(b.listing_id).localeCompare(String(a.listing_id));
 }
 
+async function enrichSellerActiveCounts<
+  T extends { seller_id?: string | null; seller_active_count?: number | null }
+>(items: T[]): Promise<T[]> {
+  const ids = [...new Set(items.map((i) => cleanText(i.seller_id)).filter(Boolean))] as string[];
+  if (!ids.length) return attachSellerActiveCounts(items, new Map());
+
+  const supabase = supabaseAdmin();
+  const res = await supabase
+    .from("listings")
+    .select("listing_seller_id")
+    .eq("status", "active")
+    .in("listing_seller_id", ids);
+  if (res.error) throw new Error(res.error.message);
+  const counts = countActiveBySellerId(
+    (res.data || []) as Array<{ listing_seller_id?: string | null }>
+  );
+  return attachSellerActiveCounts(items, counts);
+}
+
 export async function fetchPublicListings(input: PublicListingsQuery) {
   const page = Math.max(1, input.page || 1);
   const pageSize = Math.max(10, Math.min(100, input.pageSize || 50));
@@ -136,9 +162,9 @@ export async function fetchPublicListings(input: PublicListingsQuery) {
 
   const supabase = supabaseAdmin();
   const selectBase =
-    "listing_id,title,price_php,price_raw,location_raw,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,deal:deal_metrics(deal_score,below_market_pct,confidence,est_profit_php),feat:listing_features(model_family,variant,storage_gb,battery_health,openline,risk_flags)";
+    "listing_id,title,price_php,price_raw,location_raw,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,listing_seller_id,listing_seller_name,deal:deal_metrics(deal_score,below_market_pct,confidence,est_profit_php),feat:listing_features(model_family,variant,storage_gb,battery_health,openline,risk_flags)";
   const selectDeals =
-    "listing_id,title,price_php,price_raw,location_raw,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,deal:deal_metrics!inner(deal_score,below_market_pct,confidence,est_profit_php),feat:listing_features(model_family,variant,storage_gb,battery_health,openline,risk_flags)";
+    "listing_id,title,price_php,price_raw,location_raw,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,listing_seller_id,listing_seller_name,deal:deal_metrics!inner(deal_score,below_market_pct,confidence,est_profit_php),feat:listing_features(model_family,variant,storage_gb,battery_health,openline,risk_flags)";
 
   // Best deals: PostgREST nested order + range() is unreliable across pages, so fetch the
   // scored pool, sort by Save ₱ in memory, then slice. Dataset is small (~hundreds).
@@ -168,7 +194,8 @@ export async function fetchPublicListings(input: PublicListingsQuery) {
       .filter((row) => isWithinMonitorWindow(row.posted_at, row.first_seen_at, row.deal_score, nowMs));
     const sorted = [...mapped].sort(compareBestDeals);
     const total = sorted.length;
-    const items = sorted.slice(from, from + pageSize);
+    const pageItems = sorted.slice(from, from + pageSize);
+    const items = await enrichSellerActiveCounts(pageItems);
     const hasMore = total > page * pageSize;
 
     return {
@@ -199,7 +226,8 @@ export async function fetchPublicListings(input: PublicListingsQuery) {
   const rows = (res.data || []) as unknown as any[];
   const total = typeof res.count === "number" ? res.count : null;
   const hasMore = rows.length > pageSize;
-  const items: PublicListing[] = rows.slice(0, pageSize).map(mapPublicListingRow);
+  const mapped: PublicListing[] = rows.slice(0, pageSize).map(mapPublicListingRow);
+  const items = await enrichSellerActiveCounts(mapped);
 
   return {
     page,
@@ -215,7 +243,7 @@ export async function fetchPrivateListing(listingId: string) {
   const listingRes = await supabase
     .from("listings")
     .select(
-      "id,listing_id,url,title,description,location_raw,condition_raw,price_raw,price_php,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,updated_at,deal:deal_metrics(deal_score,below_market_pct,confidence,est_profit_php,comp_sample_size,comp_p25,comp_p50,comp_p75,reasons),feat:listing_features(model_family,variant,storage_gb,battery_health,openline,region_code,risk_flags)"
+      "id,listing_id,url,title,description,location_raw,condition_raw,price_raw,price_php,status,posted_at,first_seen_at,last_seen_at,last_price_change_at,updated_at,listing_seller_id,listing_seller_name,deal:deal_metrics(deal_score,below_market_pct,confidence,est_profit_php,comp_sample_size,comp_p25,comp_p50,comp_p75,reasons),feat:listing_features(model_family,variant,storage_gb,battery_health,openline,region_code,risk_flags)"
     )
     .eq("listing_id", listingId)
     .limit(1)
@@ -259,22 +287,28 @@ export async function fetchPrivateListing(listingId: string) {
         openline: feat?.openline ?? null,
         condition_raw: raw.condition_raw ?? null,
         region_code: feat?.region_code ?? null,
-        risk_flags: feat?.risk_flags ?? null
+        risk_flags: feat?.risk_flags ?? null,
+        seller_id: cleanText(raw.listing_seller_id),
+        seller_name: cleanText(raw.listing_seller_name),
+        seller_active_count: null
       }
     : null;
   if (!listing) return null;
 
+  const [enrichedListing] = await enrichSellerActiveCounts([listing]);
+  const listingWithSeller = enrichedListing || listing;
+
   const versionsRes = await supabase
     .from("listing_versions")
     .select("snapshot_at,price_php,price_raw,status,title,description,changed_fields")
-    .eq("listing_id", listing.id)
+    .eq("listing_id", listingWithSeller.id)
     .order("snapshot_at", { ascending: false, nullsFirst: false })
     .limit(100);
 
   if (versionsRes.error) throw new Error(versionsRes.error.message);
   const versions = (versionsRes.data || []) as unknown as ListingVersion[];
 
-  return { listing, versions };
+  return { listing: listingWithSeller, versions };
 }
 
 export function parsePublicQueryParams(params: URLSearchParams): PublicListingsQuery {

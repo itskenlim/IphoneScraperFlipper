@@ -7,6 +7,7 @@ import { BatteryHealthPill, PublicListingChecklist } from "@/components/listing-
 import { ListingRowChevron, ListingRowLink } from "@/components/listing-row-link";
 import { ListingsPageLink, ListingsSortToggle } from "@/components/listings-sort-toggle";
 import { MonitorPausedNote } from "@/components/monitor-paused-note";
+import { SellerMetaLine } from "@/components/seller-meta-line";
 import { LinkPendingBusy, LinkPendingDetailsCue } from "@/components/nav-pending";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -413,6 +414,13 @@ export default async function Home({
                           <div className="font-medium text-foreground transition-colors duration-200 group-hover:text-primary">
                             {row.public_title}
                           </div>
+                          <SellerMetaLine
+                            seller_name={row.seller_name}
+                            seller_id={row.seller_id}
+                            seller_active_count={row.seller_active_count}
+                            truncate
+                            className="mt-1 max-w-[380px]"
+                          />
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <BatteryHealthPill batteryHealth={row.battery_health} />
                           </div>

@@ -1,5 +1,6 @@
 import { DealQualityBadge } from "@/components/deal-quality-badge";
 import { NavButtonLink, LinkPendingBusy, LinkPendingDetailsCue } from "@/components/nav-pending";
+import { SellerMetaLine } from "@/components/seller-meta-line";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dealQualityLabel, underSimilarListingsCopy } from "@/lib/dealLabels";
@@ -21,6 +22,13 @@ function LiveDealCard({ row }: { row: PublicListing }) {
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{row.public_title}</div>
           <div className="mt-1 text-xs text-muted-foreground">{row.location_raw || "Iloilo area"}</div>
+          <SellerMetaLine
+            seller_name={row.seller_name}
+            seller_id={row.seller_id}
+            seller_active_count={row.seller_active_count}
+            truncate
+            className="mt-1"
+          />
         </div>
         <div className="shrink-0 text-right">
           <div className="font-mono text-sm font-semibold">{formatPhp(row.price_php)}</div>
@@ -101,6 +109,13 @@ export function HeroLiveDeal({ deal }: { deal: PublicListing | null }) {
           <div className="min-w-0">
             <div className="text-sm font-semibold">{deal.public_title}</div>
             <div className="mt-1 text-xs text-muted-foreground">{deal.location_raw || "Iloilo area"} · active</div>
+            <SellerMetaLine
+              seller_name={deal.seller_name}
+              seller_id={deal.seller_id}
+              seller_active_count={deal.seller_active_count}
+              truncate
+              className="mt-1"
+            />
           </div>
           <DealQualityBadge score={deal.deal_score} />
         </div>

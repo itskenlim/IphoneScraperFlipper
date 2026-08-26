@@ -5,6 +5,7 @@ import { DealQualityBadge } from "@/components/deal-quality-badge";
 import { BatteryHealthPill, PublicListingChecklist } from "@/components/listing-signal-pills";
 import { MonitorPausedNote } from "@/components/monitor-paused-note";
 import { PriceHistoryChart } from "@/components/price-history-chart";
+import { SellerMetaLine } from "@/components/seller-meta-line";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -151,6 +152,17 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span>{listing.location_raw || "—"}</span>
+              {listing.seller_name || listing.seller_id ? (
+                <>
+                  <span>•</span>
+                  <SellerMetaLine
+                    seller_name={listing.seller_name}
+                    seller_id={listing.seller_id}
+                    seller_active_count={listing.seller_active_count}
+                    className="text-sm text-muted-foreground"
+                  />
+                </>
+              ) : null}
               <span>•</span>
               {statusBadge(listing.status)}
               <span>•</span>
