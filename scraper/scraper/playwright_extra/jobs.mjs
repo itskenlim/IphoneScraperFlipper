@@ -335,6 +335,8 @@ export async function runDiscoveryJob({
           label: "enrich",
           blockImages: cfg.discoveryEnrichBlockImages,
           waitForNetworkIdle: false,
+          useNetwork: cfg.useNetwork,
+          saveNetworkRaw: cfg.saveNetworkRaw,
           progressBase: i,
           progressTotal: newRows.length
         })).rows;

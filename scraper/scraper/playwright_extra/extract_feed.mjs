@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { MARKETPLACE_SELECTOR, NETWORK_MAX_ITEMS } from "./constants.mjs";
+import { mergeNetworkListingRow } from "./network_listing_merge.mjs";
 import {
   canonicalMarketplaceItemUrl,
   cleanText,
@@ -81,62 +82,82 @@ export function collectNetworkListingsFromPayload(payload, outMap = new Map()) {
   return outMap;
 }
 
-function safeParseJsonish(text) {
-  const raw = String(text || "").trim();
-  if (!raw) return null;
-  let cleaned = raw.replace(/^for\s*\(\s*;\s*;\s*\)\s*;\s*/, "").trim();
+function stripJsonishPrefix(raw) {
+  let cleaned = String(raw || "").trim();
+  if (!cleaned) return "";
+  cleaned = cleaned.replace(/^for\s*\(\s*;\s*;\s*\)\s*;\s*/, "").trim();
   cleaned = cleaned.replace(/^\)\]\}',?\s*/i, "").trim();
   cleaned = cleaned.replace(/^while\s*\(\s*1\s*\)\s*;\s*/i, "").trim();
+  return cleaned;
+}
 
-  const extractFirstJson = (input, startAt = 0) => {
-    const startObj = input.indexOf("{", startAt);
-    const startArr = input.indexOf("[", startAt);
-    let start = -1;
-    if (startObj === -1) start = startArr;
-    else if (startArr === -1) start = startObj;
-    else start = Math.min(startObj, startArr);
-    if (start === -1) return null;
+function extractFirstJson(input, startAt = 0) {
+  const startObj = input.indexOf("{", startAt);
+  const startArr = input.indexOf("[", startAt);
+  let start = -1;
+  if (startObj === -1) start = startArr;
+  else if (startArr === -1) start = startObj;
+  else start = Math.min(startObj, startArr);
+  if (start === -1) return null;
 
-    const stack = [];
-    let inString = false;
-    let escaped = false;
-    for (let i = start; i < input.length; i += 1) {
-      const ch = input[i];
-      if (inString) {
-        if (escaped) {
-          escaped = false;
-          continue;
-        }
-        if (ch === "\\") {
-          escaped = true;
-          continue;
-        }
-        if (ch === "\"") inString = false;
+  const stack = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < input.length; i += 1) {
+    const ch = input[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
         continue;
       }
-      if (ch === "\"") {
-        inString = true;
+      if (ch === "\\") {
+        escaped = true;
         continue;
       }
-      if (ch === "{" || ch === "[") {
-        stack.push(ch === "{" ? "}" : "]");
-        continue;
-      }
-      if (ch === "}" || ch === "]") {
-        if (!stack.length || stack[stack.length - 1] !== ch) continue;
-        stack.pop();
-        if (!stack.length) return input.slice(start, i + 1);
-      }
+      if (ch === "\"") inString = false;
+      continue;
     }
-    return null;
-  };
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      stack.push(ch === "{" ? "}" : "]");
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      if (!stack.length || stack[stack.length - 1] !== ch) continue;
+      stack.pop();
+      if (!stack.length) return input.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/** Parse one or more JSON objects from a GraphQL response body (incl. NDJSON). */
+export function parseAllJsonishPayloads(text) {
+  const cleaned = stripJsonishPrefix(text);
+  if (!cleaned) return [];
+
+  const payloads = [];
+  let startAt = 0;
+  while (startAt < cleaned.length) {
+    const extracted = extractFirstJson(cleaned, startAt);
+    if (!extracted) break;
+    try {
+      const parsed = JSON.parse(extracted);
+      if (parsed && typeof parsed === "object") payloads.push(parsed);
+    } catch {}
+    const idx = cleaned.indexOf(extracted, startAt);
+    startAt = idx >= 0 ? idx + extracted.length : startAt + 1;
+    while (startAt < cleaned.length && /\s/.test(cleaned[startAt])) startAt += 1;
+  }
+  if (payloads.length) return payloads;
 
   try {
-    return JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned);
+    if (parsed && typeof parsed === "object") return [parsed];
   } catch {}
-
-  const jsonLine = tryParseJsonLines(cleaned);
-  if (jsonLine) return jsonLine;
 
   const candidates = ["{\"data\"", "{\"payload\"", "{\"errors\"", "{\"label\""];
   for (const needle of candidates) {
@@ -145,17 +166,18 @@ function safeParseJsonish(text) {
     const extracted = extractFirstJson(cleaned, idx);
     if (!extracted) continue;
     try {
-      return JSON.parse(extracted);
+      const parsed = JSON.parse(extracted);
+      if (parsed && typeof parsed === "object") return [parsed];
     } catch {}
   }
 
-  const extracted = extractFirstJson(cleaned);
-  if (!extracted) return null;
-  try {
-    return JSON.parse(extracted);
-  } catch {
-    return null;
-  }
+  const jsonLine = tryParseJsonLines(cleaned);
+  return jsonLine ? [jsonLine] : [];
+}
+
+function safeParseJsonish(text) {
+  const payloads = parseAllJsonishPayloads(text);
+  return payloads[0] || null;
 }
 
 function normalizeNetworkListing(node) {
@@ -448,12 +470,14 @@ function collectNetworkListings(payload, outMap) {
     if (!current || typeof current !== "object") continue;
 
     const candidate = normalizeNetworkListing(current);
-    if (candidate && !outMap.has(candidate.listing_id)) {
+    if (candidate) {
       const sellerId = cleanText(candidate.listing_seller_id);
       if (sellerId && DISCOVERY_SELLER_BLOCKLIST.has(sellerId)) {
         continue;
       }
-      outMap.set(candidate.listing_id, candidate);
+      const prev = outMap.get(candidate.listing_id);
+      if (!prev) outMap.set(candidate.listing_id, candidate);
+      else outMap.set(candidate.listing_id, mergeNetworkListingRow(prev, candidate));
       if (outMap.size >= NETWORK_MAX_ITEMS) return;
     }
 
@@ -470,6 +494,100 @@ async function scrollPage(page, delayMs) {
     window.scrollBy(0, Math.floor(window.innerHeight * 0.9));
   });
   if (delayMs > 0) await sleep(delayMs);
+}
+
+async function flushNetworkCollector(collector, waitMs) {
+  const ms = Math.max(0, waitMs || 0);
+  if (ms) await sleep(ms);
+  try {
+    await collector?.flush(Math.max(500, ms * 3));
+  } catch {}
+}
+
+/**
+ * Keep scrolling until we have enough GraphQL listings or scroll stops yielding new ids.
+ * Used for graphql-only discovery so we don't fall back to seller-less DOM rows.
+ */
+async function scrollForMoreNetworkListings(page, collector, opts) {
+  const { targetCount, scrollDelayMs, logEnabled, log, reason = "fill" } = opts;
+  if (!collector || !targetCount || targetCount <= 0) return collector?.getState();
+
+  const maxPasses = Math.max(0, envInt("SCRAPE_NETWORK_MAX_SCROLL_PASSES", 10));
+  const idleStop = Math.max(1, envInt("SCRAPE_NETWORK_SCROLL_IDLE_ROUNDS", 2));
+  const finalWaitMs = Math.max(0, envInt("SCRAPE_NETWORK_FINAL_WAIT_MS", 800));
+
+  let state = collector.getState();
+  if (state.networkListings.size >= targetCount) return state;
+
+  let idleRounds = 0;
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    if (state.networkListings.size >= targetCount) break;
+    const before = state.networkListings.size;
+    try {
+      await scrollPage(page, scrollDelayMs);
+    } catch {}
+    await flushNetworkCollector(collector, finalWaitMs);
+    state = collector.getState();
+    const added = state.networkListings.size - before;
+    if (added <= 0) {
+      idleRounds += 1;
+      if (idleRounds >= idleStop) {
+        if (logEnabled) {
+          log?.(
+            `[INFO] network_scroll_stop reason=${reason} idle_rounds=${idleRounds} listings=${state.networkListings.size} target=${targetCount}`
+          );
+        }
+        break;
+      }
+    } else {
+      idleRounds = 0;
+      if (logEnabled) {
+        log?.(
+          `[INFO] network_scroll pass=${pass + 1}/${maxPasses} added=${added} total=${state.networkListings.size} target=${targetCount}`
+        );
+      }
+    }
+  }
+  return state;
+}
+
+async function pokeNetworkListings(page, collector, opts) {
+  const { targetCount, scrollDelayMs, logEnabled, log, reason = "poke" } = opts;
+  if (!collector) return collector?.getState();
+
+  const pokeCount = Math.max(0, envInt("SCRAPE_NETWORK_POKE_COUNT", 2));
+  const pokeWaitMs = Math.max(200, envInt("SCRAPE_NETWORK_POKE_WAIT_MS", 1200));
+  let state = collector.getState();
+  if (!pokeCount || state.networkListings.size >= targetCount) return state;
+
+  for (let attempt = 1; attempt <= pokeCount; attempt += 1) {
+    if (state.networkListings.size >= targetCount) break;
+    const before = state.networkListings.size;
+    if (logEnabled) {
+      log?.(
+        `[INFO] network_poke attempt=${attempt}/${pokeCount} reason=${reason} listings=${before} target=${targetCount}`
+      );
+    }
+    try {
+      await page.evaluate(() => {
+        window.scrollBy(0, Math.floor(window.innerHeight * 0.7));
+      });
+    } catch {}
+    try {
+      await page.waitForResponse((response) => {
+        const url = response.url();
+        if (!url.includes("graphql")) return false;
+        const contentType = response.headers()["content-type"] || "";
+        return /json|javascript|text\/plain/i.test(contentType);
+      }, { timeout: pokeWaitMs });
+    } catch {}
+    await sleep(Math.min(1200, Math.max(0, scrollDelayMs || 0)));
+    await flushNetworkCollector(collector, pokeWaitMs);
+    state = collector.getState();
+    if (state.networkListings.size > before) continue;
+    if (before === 0 && state.networkListings.size > 0) break;
+  }
+  return state;
 }
 
 async function extractFromDom(page, { maxCards, scrollPages, scrollDelayMs, runId, scrapedAt, logEnabled, log, seenInRun }) {
@@ -598,31 +716,8 @@ export function installNetworkListingCollector(page, { log, saveNetworkRaw, runI
         networkCandidates += 1;
 
         const text = await response.text();
-        const data = safeParseJsonish(text);
-        if (!data) {
-          const jsonLine = tryParseJsonLines(text);
-          if (jsonLine) {
-            networkJsonResponses += 1;
-            if (!firstParsed) firstParsed = { url, data: jsonLine };
-            if (saveNetworkRaw && networkPayloads.length < 50) {
-              networkPayloads.push({ url, data: jsonLine });
-            }
-            const beforeCount = networkListings.size;
-            const networkMap = new Map();
-            collectNetworkListings(jsonLine, networkMap);
-            for (const [key, value] of networkMap.entries()) {
-              if (!networkListings.has(key)) networkListings.set(key, value);
-            }
-            const addedListings = networkListings.size - beforeCount;
-            if ((networkDebugAll || networkDebugEnabled) && addedListings > 0 && networkDebugLogged < 30) {
-              networkDebugLogged += 1;
-              log?.(
-                `[INFO] network_debug url=${url} status=${response.status()} content_type=${String(contentType).slice(0, 80)} ` +
-                  `added=${addedListings} total=${networkListings.size}`
-              );
-            }
-            return;
-          }
+        const payloads = parseAllJsonishPayloads(text);
+        if (!payloads.length) {
           const shouldSaveHtml =
             !htmlSampleSaved &&
             (saveNetworkRaw || networkDebugEnabled) &&
@@ -654,23 +749,29 @@ export function installNetworkListingCollector(page, { log, saveNetworkRaw, runI
         }
 
         networkJsonResponses += 1;
-        if (!firstParsed) firstParsed = { url, data };
+        if (!firstParsed) firstParsed = { url, data: payloads[0] };
         if (saveNetworkRaw && networkPayloads.length < 50) {
-          networkPayloads.push({ url, data });
+          for (const data of payloads) {
+            if (networkPayloads.length >= 50) break;
+            networkPayloads.push({ url, data });
+          }
         }
 
         const beforeCount = networkListings.size;
         const networkMap = new Map();
-        collectNetworkListings(data, networkMap);
+        for (const data of payloads) {
+          collectNetworkListings(data, networkMap);
+        }
         for (const [key, value] of networkMap.entries()) {
-          if (!networkListings.has(key)) networkListings.set(key, value);
+          const prev = networkListings.get(key);
+          networkListings.set(key, prev ? mergeNetworkListingRow(prev, value) : value);
         }
         const addedListings = networkListings.size - beforeCount;
         if ((networkDebugAll || networkDebugEnabled) && addedListings > 0 && networkDebugLogged < 30) {
           networkDebugLogged += 1;
           log?.(
             `[INFO] network_debug url=${url} status=${response.status()} content_type=${String(contentType).slice(0, 80)} ` +
-              `added=${addedListings} total=${networkListings.size}`
+              `payloads=${payloads.length} added=${addedListings} total=${networkListings.size}`
           );
         }
       } catch {}
@@ -824,7 +925,7 @@ export async function extractDiscoveryRows(page, opts) {
     // Give the response listener time to finish parsing payloads.
     const finalWaitMs = Math.max(0, envInt("SCRAPE_NETWORK_FINAL_WAIT_MS", 800));
     if (finalWaitMs) await sleep(finalWaitMs);
-    await effectiveCollector?.flush(Math.max(500, finalWaitMs * 3));
+    await flushNetworkCollector(effectiveCollector, finalWaitMs);
 
     let state = effectiveCollector?.getState() || {
       networkPayloads: [],
@@ -834,29 +935,15 @@ export async function extractDiscoveryRows(page, opts) {
       firstParsed: null
     };
 
-    const pokeCount = Math.max(0, envInt("SCRAPE_NETWORK_POKE_COUNT", 2));
-    const pokeWaitMs = Math.max(200, envInt("SCRAPE_NETWORK_POKE_WAIT_MS", 1200));
-    if (pokeCount && state.networkListings.size === 0 && effectiveCollector) {
-      for (let attempt = 1; attempt <= pokeCount; attempt += 1) {
-        if (logEnabled) log(`[INFO] network_poke attempt=${attempt}/${pokeCount} reason=no_listings`);
-        try {
-          await page.evaluate(() => {
-            window.scrollBy(0, Math.floor(window.innerHeight * 0.7));
-          });
-        } catch {}
-        try {
-          await page.waitForResponse((response) => {
-            const url = response.url();
-            if (!url.includes("graphql")) return false;
-            const contentType = response.headers()["content-type"] || "";
-            return /json|javascript|text\/plain/i.test(contentType);
-          }, { timeout: pokeWaitMs });
-        } catch {}
-        await sleep(Math.min(1200, Math.max(0, scrollDelayMs || 0)));
-        await effectiveCollector.flush(Math.max(500, pokeWaitMs * 2));
-        state = effectiveCollector.getState();
-        if (state.networkListings.size > 0) break;
-      }
+    const networkTarget = maxCards;
+    if (effectiveCollector && state.networkListings.size < networkTarget) {
+      state = await pokeNetworkListings(page, effectiveCollector, {
+        targetCount: networkTarget,
+        scrollDelayMs,
+        logEnabled,
+        log,
+        reason: state.networkListings.size === 0 ? "no_listings" : "under_target"
+      });
     }
 
     if (state.networkListings.size === 0 && effectiveCollector) {
@@ -877,8 +964,34 @@ export async function extractDiscoveryRows(page, opts) {
       } catch {}
       const reloadWaitMs = Math.max(0, envInt("SCRAPE_NETWORK_RELOAD_WAIT_MS", 1200));
       if (reloadWaitMs) await sleep(reloadWaitMs);
-      await effectiveCollector.flush(Math.max(500, reloadWaitMs * 2));
+      await flushNetworkCollector(effectiveCollector, reloadWaitMs);
       state = effectiveCollector.getState();
+    }
+
+    const scrollUntilFull = graphqlOnly || envBool("SCRAPE_NETWORK_SCROLL_UNTIL_FULL", false);
+    if (scrollUntilFull && effectiveCollector && state.networkListings.size < networkTarget) {
+      if (logEnabled) {
+        log?.(
+          `[INFO] network_scroll_start reason=${graphqlOnly ? "graphql_only" : "until_full"} have=${state.networkListings.size} target=${networkTarget}`
+        );
+      }
+      state = await scrollForMoreNetworkListings(page, effectiveCollector, {
+        targetCount: networkTarget,
+        scrollDelayMs,
+        logEnabled,
+        log,
+        reason: graphqlOnly ? "graphql_only" : "until_full"
+      });
+    }
+
+    if (graphqlOnly && effectiveCollector && state.networkListings.size < networkTarget) {
+      state = await pokeNetworkListings(page, effectiveCollector, {
+        targetCount: networkTarget,
+        scrollDelayMs,
+        logEnabled,
+        log,
+        reason: "graphql_only_tail"
+      });
     }
 
     const fromNetworkAll = Array.from(state.networkListings.values()).map((row) => ({
@@ -897,9 +1010,11 @@ export async function extractDiscoveryRows(page, opts) {
 
     if (fromNetwork.length) {
       if (logEnabled) {
+        const withSeller = fromNetwork.filter((row) => cleanText(row.listing_seller_id)).length;
+        const withName = fromNetwork.filter((row) => cleanText(row.listing_seller_name)).length;
         log(
-          `[INFO] data_source=network_json_first network_listings=${state.networkListings.size} network_candidates=${state.networkCandidates} ` +
-            `network_json_responses=${state.networkJsonResponses}`
+          `[INFO] data_source=${graphqlOnly ? "graphql_only" : "network_json_first"} network_listings=${state.networkListings.size} network_candidates=${state.networkCandidates} ` +
+            `network_json_responses=${state.networkJsonResponses} network_with_seller=${withSeller}/${fromNetwork.length} network_with_seller_name=${withName}/${fromNetwork.length}`
         );
         if (fromNetworkAll.length !== fromNetwork.length) {
           log(`[INFO] network_used used=${fromNetwork.length} available=${fromNetworkAll.length} max_cards=${maxCards}`);
@@ -994,6 +1109,18 @@ export async function extractDiscoveryRows(page, opts) {
 
     rows = sortByNewest(Array.from(merged.values())).slice(0, maxCards);
     cardsSeen = rows.length;
+    if (logEnabled) {
+      const withSeller = rows.filter((row) => cleanText(row.listing_seller_id)).length;
+      const withName = rows.filter((row) => cleanText(row.listing_seller_name)).length;
+      log(
+        `[INFO] discovery_seller_coverage total=${rows.length} with_seller_id=${withSeller} with_seller_name=${withName} graphql_only=${graphqlOnly}`
+      );
+      if (graphqlOnly && rows.length && withSeller < rows.length) {
+        log?.(
+          `[WARN] discovery_graphql_only seller_gap=${rows.length - withSeller} (GraphQL row missing marketplace_listing_seller)`
+        );
+      }
+    }
   } else {
     if (logEnabled) log("[INFO] data_source=dom");
     const dom = await extractFromDom(page, {
