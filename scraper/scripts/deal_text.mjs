@@ -740,12 +740,28 @@ export function hasDeadUnitSignal(text) {
   return collapsedHits.some((tok) => collapsed.includes(tok));
 }
 
-/** Water / liquid damage signals (EN + local). */
+/** Water / liquid damage signals (EN + local). Honors negation ("no water damage"). */
 export function hasWaterDamageSignal(text) {
   const raw = String(text || "");
   if (!raw) return false;
   const s = raw.toLowerCase();
   const collapsed = s.replace(/[^a-z0-9]+/g, "");
+
+  const negationRe = /\b(?:no|not|without|never|wala(?:ng)?|walang|di|dili|dli|indi|way|waay|free\s+from)\b/i;
+
+  function isNegatedAt(index) {
+    const window = s.slice(Math.max(0, index - 40), index);
+    return negationRe.test(window);
+  }
+
+  function patternHit(re) {
+    const flags = re.flags.includes("g") ? re.flags : `${re.flags}g`;
+    const globalRe = new RegExp(re.source, flags);
+    for (const m of s.matchAll(globalRe)) {
+      if (!isNegatedAt(m.index ?? 0)) return true;
+    }
+    return false;
+  }
 
   const patterns = [
     /\bgot\s+wet\b/i,
@@ -759,11 +775,20 @@ export function hasWaterDamageSignal(text) {
     /\bnabasaan\b/i,
     /\btubig\b[^\n]{0,16}\b(?:sulod|inside|damage)\b/i
   ];
-  if (patterns.some((re) => re.test(s))) return true;
+  if (patterns.some((re) => patternHit(re))) return true;
 
-  return ["waterdamage", "waterdamaged", "liquiddamage", "gotwet", "nawet", "nalubog"].some((tok) =>
-    collapsed.includes(tok)
-  );
+  const positiveTokens = ["waterdamage", "waterdamaged", "liquiddamage", "gotwet", "nawet", "nalubog"];
+  const negPrefixes = ["no", "not", "without", "never", "wala", "walang", "walaang", "di", "dili", "indi", "way", "waay"];
+  for (const tok of positiveTokens) {
+    let idx = 0;
+    while ((idx = collapsed.indexOf(tok, idx)) !== -1) {
+      const before = collapsed.slice(Math.max(0, idx - 12), idx);
+      const negated = negPrefixes.some((p) => before.endsWith(p));
+      if (!negated) return true;
+      idx += tok.length;
+    }
+  }
+  return false;
 }
 
 /**

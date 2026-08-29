@@ -401,6 +401,27 @@ test("water damage signals", () => {
   assert.equal(hasWaterDamageSignal("nalubog sa tubig"), true);
 });
 
+test("negated water damage is not flagged", () => {
+  assert.equal(hasWaterDamageSignal("no water damage"), false);
+  assert.equal(hasWaterDamageSignal("Fully functional, no water damage, and well-taken care of"), false);
+  assert.equal(hasWaterDamageSignal("without water damage"), false);
+  assert.equal(hasWaterDamageSignal("walang water damage"), false);
+  assert.equal(hasWaterDamageSignal("nowaterdamage"), false);
+  assert.equal(hasForPartsRisk("iPhone 14 128gb openline no water damage all working"), false);
+});
+
+test("listing 1725794708711240 style sale is not for_parts", () => {
+  const text = `For Sale: Apple iPhone 14 – Great Condition
+Storage: 128GB
+Fully functional, no water damage, and well-taken care of, performance is smooth.
+Safe to reset, open-line (any SIM)`;
+  const issues = detectIssues(text);
+  assert.equal(hasWaterDamageSignal(text), false);
+  assert.equal(hasForPartsRisk(text), false);
+  assert.equal(issues.water_damage, false);
+  assert.equal(issues.for_parts, false);
+});
+
 test("sample dead water-damaged listing is hard for_parts", () => {
   const text = `FOR SALE: iPhone 11 Pro Max 256GB (Midnight Green)
 Issue / For Repair
