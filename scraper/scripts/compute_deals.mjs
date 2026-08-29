@@ -14,6 +14,13 @@ import { parseStorageGb } from "./parse_storage.mjs";
 
 loadDotenv();
 
+export const STORAGE_UNKNOWN_REASON =
+  "Storage not listed — can't compare fairly (64/128/256GB unknown)";
+
+export function isStorageUnknownForDeals(storageGb) {
+  return storageGb == null;
+}
+
 function cleanText(value) {
   const raw = String(value ?? "").replace(/\s+/g, " ").trim();
   return raw || null;
@@ -477,7 +484,8 @@ async function main() {
       button_issue: issues.button_issue || null,
       audio_issue: issues.audio_issue || null,
       no_description: noDescription || null,
-      price_too_low: priceTikalon || null
+      price_too_low: priceTikalon || null,
+      storage_unknown: isStorageUnknownForDeals(storageGb) || null
     };
 
     const listingTimeMs =
@@ -546,6 +554,7 @@ async function main() {
   const groups = new Map();
   const groupsAll = new Map();
   for (const c of recentPriced) {
+    if (isStorageUnknownForDeals(c.storage_gb)) continue;
     const keyRegional = groupKey(c.region_code, c.model_family, c.variant, c.storage_gb);
     if (!groups.has(keyRegional)) groups.set(keyRegional, []);
     groups.get(keyRegional).push(c);
@@ -559,6 +568,27 @@ async function main() {
   const nowIso = new Date().toISOString();
 
   for (const c of candidates) {
+    if (isStorageUnknownForDeals(c.storage_gb)) {
+      const listingAsk =
+        c.price_php != null && Number.isFinite(c.price_php) ? Number(c.price_php) : null;
+      dealRows.push({
+        listing_id: c.listing_id,
+        asking_price_php: listingAsk,
+        comp_region_code: null,
+        comp_sample_size: 0,
+        comp_p25: null,
+        comp_p50: null,
+        comp_p75: null,
+        below_market_pct: null,
+        deal_score: "NA",
+        confidence: "low",
+        est_profit_php: null,
+        reasons: [STORAGE_UNKNOWN_REASON],
+        computed_at: nowIso
+      });
+      continue;
+    }
+
     const featureComplete = !!(c.model_family && c.variant && c.storage_gb != null);
 
     const primaryKey = groupKey(c.region_code, c.model_family, c.variant, c.storage_gb);
