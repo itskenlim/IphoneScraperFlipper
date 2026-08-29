@@ -66,6 +66,7 @@ function modelFamilyRank(family) {
   if (f === "iphone_xr" || f === "iphone_xs") return 11;
   if (f === "iphone_se_2") return 12.5;
   if (f === "iphone_se_3") return 14.5;
+  if (f === "iphone_air") return 16.75;
   const m = /^iphone_(\d{1,2})$/.exec(f);
   if (m) {
     const n = Number.parseInt(m[1], 10);
@@ -89,7 +90,7 @@ export function stripSwapPreferenceMentions(text) {
   if (!s) return "";
 
   const modelTok =
-    String.raw`(?:iphone|ip)\s*(?:air(?:\s*1[7-9])?|se(?:\s*[23])?|x[rs]?|1[1-7](?:\s*e)?|[7-9])(?:\s*(?:pro(?:\s*max)?|plus|max|mini))?`;
+    String.raw`(?:iphone|ip)\s*(?:air(?:\s*(?:1[7-9]|20))?|se(?:\s*[23])?|x[rs]?|(?:1[1-9]|20)(?:\s*e)?|[7-9])(?:\s*(?:pro(?:\s*max)?|plus|max|mini))?`;
 
   // (prefered iphone 15) / (swap sa IP16)
   s = s.replace(
@@ -117,6 +118,29 @@ export function stripSwapPreferenceMentions(text) {
   return s.replace(/\s+/g, " ").trim();
 }
 
+function isIphoneAirText(s) {
+  return (
+    /\biphone\s*air\b/i.test(s) ||
+    /\biphone\s*\d{1,2}\s*air\b/i.test(s) ||
+    /\bip\s*air\b/i.test(s)
+  );
+}
+
+function parseNumberedIphoneE(s) {
+  const patterns = [
+    /\biphone\s*(\d{1,2})\s*e\b/i,
+    /\bip\s*(\d{1,2})\s*e\b/i,
+    /\bip(\d{1,2})e\b/i
+  ];
+  for (const re of patterns) {
+    const m = re.exec(s);
+    if (!m) continue;
+    const n = Number.parseInt(m[1], 10);
+    if (Number.isFinite(n) && n >= 7 && n <= 20) return `iphone_${n}`;
+  }
+  return null;
+}
+
 function collectModelFamilies(text) {
   const s = String(text || "").toLowerCase();
   if (!s) return [];
@@ -124,6 +148,21 @@ function collectModelFamilies(text) {
   const push = (family) => {
     if (family && !found.includes(family)) found.push(family);
   };
+
+  if (isIphoneAirText(s)) push("iphone_air");
+
+  for (const m of s.matchAll(/\biphone\s*(\d{1,2})\s*e\b/gi)) {
+    const n = Number.parseInt(m[1], 10);
+    if (Number.isFinite(n) && n >= 7 && n <= 20) push(`iphone_${n}`);
+  }
+  for (const m of s.matchAll(/\bip\s*(\d{1,2})\s*e\b/gi)) {
+    const n = Number.parseInt(m[1], 10);
+    if (Number.isFinite(n) && n >= 7 && n <= 20) push(`iphone_${n}`);
+  }
+  for (const m of s.matchAll(/\bip(\d{1,2})e\b/gi)) {
+    const n = Number.parseInt(m[1], 10);
+    if (Number.isFinite(n) && n >= 7 && n <= 20) push(`iphone_${n}`);
+  }
 
   for (const m of s.matchAll(/\biphone\s*(\d{1,2})\b/gi)) {
     const n = Number.parseInt(m[1], 10);
@@ -161,7 +200,7 @@ export function parseModelFamily(text) {
 
   const models = collectModelFamilies(s);
   if (models.length >= 2) {
-    const letter = new Set(["iphone_xr", "iphone_xs", "iphone_x"]);
+    const letter = new Set(["iphone_xr", "iphone_xs", "iphone_x", "iphone_air"]);
     const hasLetter = models.some((m) => letter.has(m));
     const hasNumbered = models.some((m) => /^iphone_\d{1,2}$/.test(m));
     // PH mods: XR (etc.) made to look like a newer numbered iPhone.
@@ -170,6 +209,11 @@ export function parseModelFamily(text) {
       return [...models].sort((a, b) => modelFamilyRank(a) - modelFamilyRank(b))[0];
     }
   }
+
+  if (isIphoneAirText(s)) return "iphone_air";
+
+  const eFamily = parseNumberedIphoneE(s);
+  if (eFamily) return eFamily;
 
   // Prefer numbered iPhones first.
   const num = /\biphone\s*(\d{1,2})\b/i.exec(s);
@@ -198,7 +242,7 @@ export function parseModelFamily(text) {
   return null;
 }
 
-function parseVariant(text, modelFamily) {
+export function parseVariant(text, modelFamily) {
   const s = String(text || "").toLowerCase();
   // X-series "Max" variants (XS Max). Keep as a distinct variant.
   if (/\b(xs|x)\s*max\b/i.test(s) || /\bxsmax\b/i.test(s)) return "max";
@@ -208,6 +252,13 @@ function parseVariant(text, modelFamily) {
 
   const numMatch = modelFamily ? /iphone_(\d{1,2})/i.exec(modelFamily) : null;
   const modelNumber = numMatch ? Number.parseInt(numMatch[1], 10) : null;
+  if (Number.isFinite(modelNumber) && modelNumber >= 16 && modelNumber <= 20) {
+    const eRe = new RegExp(
+      String.raw`\b(?:iphone\s*${modelNumber}\s*e|${modelNumber}\s*e|ip\s*${modelNumber}\s*e|ip${modelNumber}e)\b`,
+      "i"
+    );
+    if (eRe.test(s)) return "e";
+  }
   const plusAllowed =
     Number.isFinite(modelNumber) && [7, 8, 14, 15, 16, 17, 18, 19, 20].includes(modelNumber);
   if (plusAllowed && Number.isFinite(modelNumber)) {

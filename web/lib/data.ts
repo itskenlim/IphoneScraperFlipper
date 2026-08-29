@@ -36,6 +36,7 @@ function publicTitleFromFeatures(feat: any, fallbackTitle: unknown): string {
     if (s === "iphone_se") return "iPhone SE";
     if (s === "iphone_se_2") return "iPhone SE (2020)";
     if (s === "iphone_se_3") return "iPhone SE (2022)";
+    if (s === "iphone_air") return "iPhone Air";
     const m = /^iphone_(\d{1,2})$/.exec(s);
     if (m) return `iPhone ${m[1]}`;
     return "";
@@ -48,6 +49,7 @@ function publicTitleFromFeatures(feat: any, fallbackTitle: unknown): string {
     if (s === "plus") return "Plus";
     if (s === "mini") return "Mini";
     if (s === "max") return "Max";
+    if (s === "e") return "e";
     return "";
   };
 
@@ -66,6 +68,7 @@ function publicTitleFromFeatures(feat: any, fallbackTitle: unknown): string {
   if (/\biphone\s*xs\b/i.test(lowered)) return "iPhone XS";
   if (/\biphone\s*x\b/i.test(lowered)) return "iPhone X";
   if (/\biphone\s*se\b/i.test(lowered)) return "iPhone SE";
+  if (/\biphone\s*air\b/i.test(lowered) || /\biphone\s*\d{1,2}\s*air\b/i.test(lowered)) return "iPhone Air";
   return "iPhone";
 }
 
@@ -98,6 +101,12 @@ function mapPublicListingRow(r: any): PublicListing {
     confidence: deal?.confidence ?? null,
     est_profit_php: deal?.est_profit_php ?? null,
     risk_flags: feat?.risk_flags ?? null,
+    storage_gb:
+      typeof feat?.storage_gb === "number"
+        ? feat.storage_gb
+        : typeof feat?.storage_gb === "string" && Number.isFinite(Number(feat.storage_gb))
+          ? Number(feat.storage_gb)
+          : null,
     seller_id: cleanText(r.listing_seller_id),
     seller_name: cleanText(r.listing_seller_name),
     seller_active_count: null

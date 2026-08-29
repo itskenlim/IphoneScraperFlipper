@@ -5,6 +5,7 @@ import {
   CameraOff,
   CloudOff,
   FileWarning,
+  HardDrive,
   Lock,
   Mic,
   Monitor,
@@ -19,6 +20,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { parseRiskFlags } from "@/lib/riskFlags";
+import { isStorageUnknown, STORAGE_UNKNOWN_TITLE } from "@/lib/listingSignals";
 import { cn } from "@/lib/utils";
 
 type PillTone = "good" | "bad" | "warn" | "neutral" | "unknown";
@@ -59,16 +61,27 @@ function Pill({ label, title, icon: Icon, tone, mono }: PillProps) {
   );
 }
 
+export function StorageUnknownPill({ className }: { className?: string }) {
+  return (
+    <div className={className}>
+      <Pill label="Storage ?" title={STORAGE_UNKNOWN_TITLE} icon={HardDrive} tone="warn" />
+    </div>
+  );
+}
+
 export function PublicListingChecklist({
   riskFlags,
   openline,
+  storageGb,
   className
 }: {
   riskFlags?: unknown;
   openline?: boolean | null;
+  storageGb?: number | null;
   className?: string;
 }) {
   const flags = parseRiskFlags(riskFlags);
+  const storageUnknown = isStorageUnknown(riskFlags, storageGb);
 
   const faceTone: PillTone = flags.face_id_not_working ? "bad" : flags.face_id_working ? "good" : "unknown";
   const trutoneTone: PillTone = flags.trutone_missing ? "bad" : flags.trutone_working ? "good" : "unknown";
@@ -80,6 +93,7 @@ export function PublicListingChecklist({
 
   return (
     <div className={cn("flex flex-wrap items-center gap-1", className)}>
+      {storageUnknown ? <StorageUnknownPill /> : null}
       <Pill
         label="Face ID"
         title={faceTone === "unknown" ? "Face ID status unknown" : `Face ID ${faceTone === "good" ? "working" : "not working"}`}

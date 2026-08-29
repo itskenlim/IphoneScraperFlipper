@@ -19,13 +19,13 @@ export function normalizeListingText(value) {
 
 /** Full "iPhone 13" / "iphone 16e" / "iPhone Air" style (after normalize). */
 export const IPHONE_MODEL_RE =
-  /\biphone\s*(?:air(?:\s*1[7-9])?|se(?:\s*[23])?|x[rs]?|1[1-7](?:\s*e)?|[7-9])(?:\s*(?:pro(?:\s*max)?|plus|max|mini))?\b/i;
+  /\biphone\s*(?:air(?:\s*(?:1[7-9]|20))?|se(?:\s*[23])?|x[rs]?|(?:1[1-9]|20)(?:\s*e)?|[7-9])(?:\s*(?:pro(?:\s*max)?|plus|max|mini))?\b/i;
 
 /**
- * Common PH Marketplace shorthand: IP11, IP 13, IP15PRO, ip16, IP16e.
+ * Common PH Marketplace shorthand: IP11, IP 13, IP15PRO, ip16, IP16e, IP18.
  */
 export const IPHONE_SHORTHAND_RE =
-  /\bip\s*(?:air(?:\s*1[7-9])?|se|x[rs]?|1[1-7](?:\s*e)?|[7-9])(?:\s*(?:pro(?:\s*max)?|plus|max|mini))?\b/i;
+  /\bip\s*(?:air(?:\s*(?:1[7-9]|20))?|se|x[rs]?|(?:1[1-9]|20)(?:\s*e)?|[7-9])(?:\s*(?:pro(?:\s*max)?|plus|max|mini))?\b/i;
 
 /**
  * Non-iPhone products that show up in "query=iphone" results (swap-for-iPhone, wrong category).
@@ -89,7 +89,7 @@ const ACCESSORY_NOUN_RE =
   "(?:tempered\\s*glass|screen\\s*protectors?|glass\\s*protectors?|(?:phone\\s+)?cases?|covers?|chargers?|cables?|pouches?|films?|protectors?)";
 
 const MODEL_TOKEN_RE =
-  "(?:iphone|ip)\\s*(?:air(?:\\s*1[7-9])?|se(?:\\s*[23])?|x[rs]?|1[1-7](?:\\s*e)?|[7-9])(?:\\s*(?:pro(?:\\s*max)?|plus|max|mini))?";
+  "(?:iphone|ip)\\s*(?:air(?:\\s*(?:1[7-9]|20))?|se(?:\\s*[23])?|x[rs]?|(?:1[1-9]|20)(?:\\s*e)?|[7-9])(?:\\s*(?:pro(?:\\s*max)?|plus|max|mini))?";
 
 /**
  * Remove bonus / inclusion / negation accessory phrases so "with free case"

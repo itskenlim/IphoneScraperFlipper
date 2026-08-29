@@ -18,6 +18,7 @@ import { fetchPublicListings } from "@/lib/data";
 import { dealQualityLabel, isLowConfidence, underSimilarListingsCopy } from "@/lib/dealLabels";
 import { formatDateTime, formatPct, formatPhp, formatRelativeAge } from "@/lib/format";
 import { isMonitorPaused, isWithinMonitorWindow } from "@/lib/listingMonitor";
+import { isStorageUnknown, STORAGE_UNKNOWN_LABEL } from "@/lib/listingSignals";
 import { parseRiskFlags } from "@/lib/riskFlags";
 import type { PublicListing } from "@/lib/types";
 import { Flag } from "lucide-react";
@@ -328,7 +329,11 @@ export default async function Home({
                         </div>
 
                         <div className="mt-3">
-                          <PublicListingChecklist riskFlags={row.risk_flags} openline={row.openline} />
+                          <PublicListingChecklist
+                            riskFlags={row.risk_flags}
+                            openline={row.openline}
+                            storageGb={row.storage_gb}
+                          />
                         </div>
 
                         {shownRedFlags.length ? (
@@ -350,6 +355,8 @@ export default async function Home({
 
                         {dealSignals ? (
                           <div className="mt-3">{dealSignals}</div>
+                        ) : isStorageUnknown(row.risk_flags, row.storage_gb) ? (
+                          <div className="mt-3 text-[11px] text-amber-600 dark:text-amber-400">{STORAGE_UNKNOWN_LABEL}</div>
                         ) : sortMode === "deals" ? (
                           <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                             <Badge variant="outline" className="h-6 px-2 py-0 text-[11px] text-muted-foreground">
@@ -425,7 +432,11 @@ export default async function Home({
                             <BatteryHealthPill batteryHealth={row.battery_health} />
                           </div>
                           <div className="mt-2">
-                            <PublicListingChecklist riskFlags={row.risk_flags} openline={row.openline} />
+                            <PublicListingChecklist
+                              riskFlags={row.risk_flags}
+                              openline={row.openline}
+                              storageGb={row.storage_gb}
+                            />
                           </div>
                           {shownRedFlags.length ? (
                             <div className="mt-3 rounded-lg border border-rose-500/60 bg-rose-500/5 p-2 text-[11px] text-muted-foreground">
@@ -452,6 +463,8 @@ export default async function Home({
                           <TableCell className="max-w-[220px]">
                             {dealSignals ? (
                               dealSignals
+                            ) : isStorageUnknown(row.risk_flags, row.storage_gb) ? (
+                              <span className="text-xs text-amber-600 dark:text-amber-400">{STORAGE_UNKNOWN_LABEL}</span>
                             ) : sortMode === "deals" ? (
                               <span className="text-xs text-muted-foreground">Unscored</span>
                             ) : null}

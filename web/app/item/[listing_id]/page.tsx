@@ -13,6 +13,7 @@ import { fetchPrivateListing } from "@/lib/data";
 import { confidencePlainLabel, dealQualityLabel, underSimilarListingsCopy } from "@/lib/dealLabels";
 import { formatDateTime, formatPct, formatPhp, formatRelativeAge, stripEmojiFromTitle } from "@/lib/format";
 import { isMonitorPaused } from "@/lib/listingMonitor";
+import { isStorageUnknown, STORAGE_UNKNOWN_TITLE } from "@/lib/listingSignals";
 import { parseRiskFlags, triStateFromFlags } from "@/lib/riskFlags";
 
 function statusBadge(status: string) {
@@ -74,6 +75,7 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
   const profit = typeof listing.est_profit_php === "number" ? listing.est_profit_php : null;
 
   const flags = parseRiskFlags(listing.risk_flags);
+  const storageUnknown = isStorageUnknown(listing.risk_flags, listing.storage_gb);
   const hardBlocked =
     flags.icloud_lock ||
     flags.wanted_post ||
@@ -82,7 +84,7 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
     flags.water_damage ||
     flags.price_too_low ||
     flags.price_unverified ||
-    score === "NA";
+    (score === "NA" && !storageUnknown);
   const faceIdTri = triStateFromFlags(flags, "face_id_working", "face_id_not_working");
   const trutoneTri = triStateFromFlags(flags, "trutone_working", "trutone_missing");
 
@@ -94,7 +96,9 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
     profit > 0 &&
     confidence !== "low";
 
-  const verdictTitle = goodDeal
+  const verdictTitle = storageUnknown
+    ? "Can't estimate deal — storage not listed"
+    : goodDeal
     ? "Good deal"
     : hardBlocked
       ? flags.price_too_low
@@ -112,7 +116,9 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
             ? "Low confidence — needs a quick check"
             : "Needs a quick manual check";
 
-  const verdictReason = hardBlocked
+  const verdictReason = storageUnknown
+    ? STORAGE_UNKNOWN_TITLE
+    : hardBlocked
     ? flags.price_too_low
       ? "Ask is far below a realistic phone price. Hidden until the seller updates it (monitor will re-check)."
       : flags.price_unverified
@@ -128,8 +134,9 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
           ? "Not enough similar listings for strong confidence."
           : "Worth a closer look before deciding.";
 
-  const compsLabel =
-    listing.comp_sample_size != null
+  const compsLabel = storageUnknown
+    ? "No price estimate — storage unknown"
+    : listing.comp_sample_size != null
       ? `Based on ${listing.comp_sample_size} similar listings`
       : "Not enough similar listings yet";
 
@@ -208,6 +215,8 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
               <div className="flex items-center gap-2 text-base font-semibold">
                 {goodDeal ? (
                   <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden />
+                ) : storageUnknown ? (
+                  <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden />
                 ) : hardBlocked ? (
                   <XCircle className="h-5 w-5 text-rose-500" aria-hidden />
                 ) : (
@@ -441,10 +450,24 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
           <section className="rounded-xl border border-border/70 bg-card/60 p-4">
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Quick checks</div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <PublicListingChecklist riskFlags={listing.risk_flags} openline={listing.openline} />
+              <PublicListingChecklist
+                riskFlags={listing.risk_flags}
+                openline={listing.openline}
+                storageGb={listing.storage_gb}
+              />
               <BatteryHealthPill batteryHealth={listing.battery_health} />
             </div>
           </section>
+
+          {storageUnknown ? (
+            <section className="rounded-xl border border-amber-200/70 bg-amber-50/70 p-4 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                <AlertTriangle className="h-4 w-4" aria-hidden />
+                <span>No price estimate</span>
+              </div>
+              <p className="mt-2 text-xs">{STORAGE_UNKNOWN_TITLE}</p>
+            </section>
+          ) : null}
 
           {warnings.length ? (
             <section className="rounded-xl border border-rose-200/70 bg-rose-50/70 p-4 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">

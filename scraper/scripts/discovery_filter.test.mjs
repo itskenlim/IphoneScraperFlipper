@@ -27,6 +27,9 @@ test("hasIphoneModel matches full and shorthand forms", () => {
   assert.equal(hasIphoneModel("Rush+rush+iPhone+15", ""), true);
   assert.equal(hasIphoneModel("iPhone 16e 128GB", ""), true);
   assert.equal(hasIphoneModel("iPhone Air 17 256 Sky Blue", ""), true);
+  assert.equal(hasIphoneModel("iPhone 18 Pro 256gb", ""), true);
+  assert.equal(hasIphoneModel("IP18", ""), true);
+  assert.equal(hasIphoneModel("iphone 20 pro max", ""), true);
   assert.equal(hasIphoneModel("for sale laptop only", ""), false);
   assert.equal(hasIphoneModel("IP address setup guide", ""), false);
 });

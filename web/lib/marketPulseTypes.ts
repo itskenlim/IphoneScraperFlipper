@@ -39,6 +39,7 @@ function formatModelFamily(mf: string): string {
   if (s === "iphone_se") return "iPhone SE";
   if (s === "iphone_se_2") return "iPhone SE (2020)";
   if (s === "iphone_se_3") return "iPhone SE (2022)";
+  if (s === "iphone_air") return "iPhone Air";
   const m = /^iphone_(\d{1,2})$/.exec(s);
   if (m) return `iPhone ${m[1]}`;
   return mf.replace(/_/g, " ");
@@ -51,6 +52,7 @@ function formatVariant(v: string): string {
   if (s === "plus") return "Plus";
   if (s === "mini") return "Mini";
   if (s === "max") return "Max";
+  if (s === "e") return "e";
   if (s === "base") return "";
   return "";
 }

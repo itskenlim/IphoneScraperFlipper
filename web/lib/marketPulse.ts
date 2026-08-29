@@ -202,7 +202,9 @@ async function loadMarketPulseUncached(): Promise<MarketPulse> {
     "iphone_14|base|128",
     "iphone_11|base|128",
     "iphone_12|base|128",
-    "iphone_15|base|128"
+    "iphone_15|base|128",
+    "iphone_16|base|128",
+    "iphone_air|base|256"
   ];
   const defaultKey = preferred.find((k) => models.some((m) => m.key === k)) || models[0]?.key || null;
 
