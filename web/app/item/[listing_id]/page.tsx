@@ -166,6 +166,7 @@ export default async function ItemPage({ params }: { params: Promise<{ listing_i
                     seller_name={listing.seller_name}
                     seller_id={listing.seller_id}
                     seller_active_count={listing.seller_active_count}
+                    showSellerId
                     className="text-sm text-muted-foreground"
                   />
                 </>

@@ -11,10 +11,22 @@ test("hides when both missing", () => {
   assert.equal(formatSellerLine({ seller_name: null, seller_id: null, seller_active_count: null }), null);
 });
 
-test("name + id + count", () => {
+test("name + id + count on detail view", () => {
+  assert.equal(
+    formatSellerLine({
+      seller_name: "Maria Santos",
+      seller_id: "100087109610666",
+      seller_active_count: 4,
+      showSellerId: true
+    }),
+    "Maria Santos · id 100087109610666 · 4 active"
+  );
+});
+
+test("card view hides seller id but keeps name and active count", () => {
   assert.equal(
     formatSellerLine({ seller_name: "Maria Santos", seller_id: "100087109610666", seller_active_count: 4 }),
-    "Maria Santos · id 100087109610666 · 4 active"
+    "Maria Santos · 4 active"
   );
 });
 
@@ -22,15 +34,22 @@ test("name only when id missing", () => {
   assert.equal(formatSellerLine({ seller_name: "Maria", seller_id: null, seller_active_count: 3 }), "Maria");
 });
 
-test("id + count without name", () => {
+test("id-only seller hidden on cards", () => {
+  assert.equal(formatSellerLine({ seller_name: null, seller_id: "99", seller_active_count: 2 }), null);
+});
+
+test("id + count on detail view", () => {
   assert.equal(
-    formatSellerLine({ seller_name: null, seller_id: "99", seller_active_count: 2 }),
+    formatSellerLine({ seller_name: null, seller_id: "99", seller_active_count: 2, showSellerId: true }),
     "id 99 · 2 active"
   );
 });
 
-test("id without count omits active suffix", () => {
-  assert.equal(formatSellerLine({ seller_name: null, seller_id: "99", seller_active_count: null }), "id 99");
+test("id without count on detail view", () => {
+  assert.equal(
+    formatSellerLine({ seller_name: null, seller_id: "99", seller_active_count: null, showSellerId: true }),
+    "id 99"
+  );
 });
 
 test("counts active rows per seller id", () => {

@@ -2,14 +2,17 @@ export function formatSellerLine(input: {
   seller_name?: string | null;
   seller_id?: string | null;
   seller_active_count?: number | null;
+  /** Show numeric seller id (item detail only). Cards default to name + active count. */
+  showSellerId?: boolean;
 }): string | null {
   const name = (input.seller_name || "").trim() || null;
   const id = (input.seller_id || "").trim() || null;
-  if (!name && !id) return null;
+  const showSellerId = input.showSellerId === true;
+  if (!name && !(showSellerId && id)) return null;
 
   const parts: string[] = [];
   if (name) parts.push(name);
-  if (id) parts.push(`id ${id}`);
+  if (showSellerId && id) parts.push(`id ${id}`);
   if (id && typeof input.seller_active_count === "number" && Number.isFinite(input.seller_active_count)) {
     parts.push(`${Math.round(input.seller_active_count)} active`);
   }
